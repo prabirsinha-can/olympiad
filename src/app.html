@@ -76,7 +76,10 @@ button:focus-visible { outline: 3px solid var(--acc); outline-offset: 3px; }
 
 .qhead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-top: 22px; }
 .qhead .subj { font-family: var(--f-display); font-size: 22px; color: var(--acc); font-weight: 800; }
-.qhead .count { color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+.qhead .count { color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; display: flex; gap: 10px; align-items: center; }
+.lvl { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; padding: 2px 9px; border-radius: 999px; border: 1.5px solid currentColor; }
+.lvl.easy { color: var(--ok); } .lvl.medium { color: var(--acc); } .lvl.hard { color: var(--bad); }
+.lvls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-variant-numeric: tabular-nums; }
 .dots { display: flex; gap: 6px; margin-top: 8px; }
 .dots i { flex: 1; height: 6px; border-radius: 3px; background: var(--line); }
 .dots i.ok { background: var(--ok); } .dots i.bad { background: var(--bad); } .dots i.cur { background: var(--acc); }
@@ -182,6 +185,9 @@ button:focus-visible { outline: 3px solid var(--acc); outline-offset: 3px; }
 
 <script>
 /*BANK*/
+</script>
+<script>
+/*GEN*/
 </script>
 <script>
 const SUBJ = [
@@ -296,20 +302,27 @@ const VIZ = {
     return svg(ox * 2 + W, oy + H + 30, o);
   },
   shape({ name, sym }) {
-    let pts = name === "triangle" ? [[90, 14], [166, 146], [14, 146]] : [[20, 10], [160, 10], [160, 150], [20, 150]];
+    if (name === "circle") return svg(180, 162, `<circle cx="90" cy="81" r="70" class="shp"/>` + T(90, 81, "no corners", "cap"));
+    const pts = name === "triangle" ? [[90, 14], [166, 146], [14, 146]] : name === "rectangle" ? [[10, 30], [170, 30], [170, 130], [10, 130]] : [[20, 10], [160, 10], [160, 150], [20, 150]];
     let o = `<polygon points="${pts.map(p => p.join(",")).join(" ")}" class="shp"/>`;
     if (sym) o += `<line x1="90" y1="0" x2="90" y2="160" class="symm"/><line x1="10" y1="80" x2="170" y2="80" class="symm"/><line x1="10" y1="0" x2="170" y2="160" class="symm"/><line x1="170" y1="0" x2="10" y2="160" class="symm"/>`;
     else {
-      pts.forEach(([x, y], k) => o += `<circle cx="${x}" cy="${y}" r="8" class="corner"/>`);
-      pts.forEach(([x, y], k) => { const [a, b] = pts[(k + 1) % pts.length], mx = (x + a) / 2, my = (y + b) / 2, cx = 90, cy = 90; const dx = mx - cx, dy = my - cy, l = Math.hypot(dx, dy); o += T(mx + dx / l * 16, my + dy / l * 16, k + 1, "jl"); });
+      pts.forEach(([x, y]) => o += `<circle cx="${x}" cy="${y}" r="8" class="corner"/>`);
+      pts.forEach(([x, y], k) => { const [a, b] = pts[(k + 1) % pts.length], mx = (x + a) / 2, my = (y + b) / 2, dx = mx - 90, dy = my - 80, l = Math.hypot(dx, dy) || 1; o += T(mx + dx / l * 16, my + dy / l * 16, k + 1, "jl"); });
     }
     return svg(180, 162, o);
   },
   angle({ deg }) {
-    const cx = 30, cy = 130, L = 120, a = deg * Math.PI / 180;
+    const wide = deg > 90, cx = wide ? 140 : 30, cy = 130, L = 120, a = deg * Math.PI / 180, W = wide ? 280 : 170;
     let o = `<line x1="${cx}" y1="${cy}" x2="${cx + L}" y2="${cy}" class="ray"/><line x1="${cx}" y1="${cy}" x2="${cx + L * Math.cos(a)}" y2="${cy - L * Math.sin(a)}" class="ray"/>`;
-    o += deg === 90 ? `<path d="M${cx + 20} ${cy} V${cy - 20} H${cx}" class="arc"/>` : `<path d="M${cx + 30} ${cy} A30 30 0 0 0 ${cx + 30 * Math.cos(a)} ${cy - 30 * Math.sin(a)}" class="arc"/>`;
-    return svg(170, 140, o + T(cx + 62, cy - 42, deg + "°", "big"));
+    o += deg === 90 ? `<path d="M${cx + 20} ${cy} V${cy - 20} H${cx}" class="arc"/>` : `<path d="M${cx + 30} ${cy} A30 30 0 0 0 ${cx + 30 * Math.cos(a)} ${cy - 30 * Math.sin(a) - (deg === 180 ? 0.01 : 0)}" class="arc"/>`;
+    const la = a / 2;
+    return svg(W, 140, o + T(cx + 58 * Math.cos(la), cy - 58 * Math.sin(la) - (deg === 180 ? 22 : 0), deg + "°", "big"));
+  },
+  count({ n, i, plain }) {
+    const per = 5, g = 34, rows = Math.ceil(n / per), w = Math.min(n, per) * g; let o = "";
+    for (let k = 0; k < n; k++) { const x = (k % per) * g + g / 2, y = Math.floor(k / per) * (plain ? g : g + 14) + g / 2; o += E(x, y, i, 24) + (plain ? "" : T(x, y + 22, k + 1, "jl")); }
+    return svg(w, rows * (plain ? g : g + 14) + 4, o);
   },
   bars({ items, hl }) {
     const max = Math.max(...items.map(i => i[1])), bw = 44, gap = 20, H = 120, W = items.length * (bw + gap); let o = `<line x1="0" y1="${H + 12}" x2="${W}" y2="${H + 12}" class="axis"/>`;
@@ -361,22 +374,37 @@ function start() {
   <section class="hero">
     <span class="eyebrow">Olympiad practice · IMO · NSO · IEO</span>
     <h1>Which grade are you practising today?</h1>
-    <p>Pick your grade to begin. You will get 10 fresh questions in each subject, with a picture explanation after every answer.</p>
+    <p>Pick your grade to begin. Each subject has a bank of 300 questions. Every test draws 10 new ones per subject (4 easy, 4 medium and 2 hard), with a picture explanation after every answer.</p>
   </section>
   <div class="grades">
     <button class="grade" id="g1" data-g="1"><span class="num">1</span><span class="lbl">Grade 1</span><span class="sub">Counting, shapes, plants, animals and first words</span></button>
     <button class="grade" id="g4" data-g="4"><span class="num">4</span><span class="lbl">Grade 4</span><span class="sub">Fractions, area, the solar system, tenses and idioms</span></button>
   </div>
   <div class="plan">
-    <div style="--c:var(--imo)"><b>IMO · Maths</b><span>10 questions · 20 minutes</span></div>
-    <div style="--c:var(--nso)"><b>NSO · Science</b><span>10 questions · 20 minutes</span></div>
-    <div style="--c:var(--ieo)"><b>IEO · English</b><span>10 questions · 20 minutes</span></div>
+    <div style="--c:var(--imo)"><b>IMO · Maths</b><span>10 questions · 20 minutes · 4 easy, 4 medium, 2 hard</span></div>
+    <div style="--c:var(--nso)"><b>NSO · Science</b><span>10 questions · 20 minutes · 4 easy, 4 medium, 2 hard</span></div>
+    <div style="--c:var(--ieo)"><b>IEO · English</b><span>10 questions · 20 minutes · 4 easy, 4 medium, 2 hard</span></div>
   </div>`;
   app.querySelectorAll(".grade").forEach(b => b.onclick = () => greet(+b.dataset.g));
 }
 
+const POOLS = {}, MIX = { easy: 4, medium: 4, hard: 2 };
+const store = { get(k) { try { return JSON.parse(localStorage.getItem(k) || "[]"); } catch (e) { return []; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
+// 4 easy, 4 medium, 2 hard, easy first. Questions this browser has already seen are skipped until a tier runs out.
+function drawSet(g, key) {
+  const pool = POOLS[g + key] || (POOLS[g + key] = buildPool(g, key, BANK[g][key].map(q => ({ ...q, d: q.d || (g === 1 ? "easy" : "medium") }))));
+  const sk = `olympiad-seen-${g}-${key}`, seen = new Set(store.get(sk)), out = [];
+  for (const d of ["easy", "medium", "hard"]) {
+    let fresh = pool[d].filter(q => !seen.has(q.id));
+    if (fresh.length < MIX[d]) { pool[d].forEach(q => seen.delete(q.id)); fresh = pool[d].slice(); }
+    out.push(...shuffle(fresh).slice(0, MIX[d]));
+  }
+  out.forEach(q => seen.add(q.id)); store.set(sk, [...seen]);
+  return out;
+}
+
 function greet(g) {
-  S = { grade: g, cur: 0, sections: SUBJ.map(s => ({ ...s, qs: shuffle(BANK[g][s.key]).slice(0, PER_SECTION).map(q => ({ ...q, opts: q.k ? q.o.slice() : shuffle(q.o) })), idx: 0, res: [], endAt: 0, done: false, timeUp: false })) };
+  S = { grade: g, cur: 0, sections: SUBJ.map(s => ({ ...s, qs: drawSet(g, s.key).map(q => ({ ...q, opts: q.k ? q.o.slice() : shuffle(q.o) })), idx: 0, res: [], endAt: 0, done: false, timeUp: false })) };
   app.innerHTML = `
   <section class="greet">
     <h1>Hello ${NAMES[g]} <span aria-hidden="true">👋</span></h1>
@@ -412,7 +440,7 @@ function tick() {
 function renderQ() {
   const sec = S.sections[S.cur], q = sec.qs[sec.idx];
   app.innerHTML = `
-  <div class="qhead"><span class="subj">${sec.code} · ${sec.name}</span><span class="count">Question ${sec.idx + 1} of ${sec.qs.length}</span></div>
+  <div class="qhead"><span class="subj">${sec.code} · ${sec.name}</span><span class="count"><span class="lvl ${q.d}">${q.d}</span> Question ${sec.idx + 1} of ${sec.qs.length}</span></div>
   <div class="dots">${sec.qs.map((_, k) => `<i class="${k < sec.res.length ? (sec.res[k] ? "ok" : "bad") : k === sec.idx ? "cur" : ""}"></i>`).join("")}</div>
   <article class="qcard">
     <p class="qtext">${esc(q.q)}</p>
@@ -468,7 +496,8 @@ function results() {
     <h2>${pct >= .8 ? "Superstar" : pct >= .5 ? "Great effort" : "Nice try"}, ${NAMES[S.grade]}!</h2>
     <div class="score">${total}<small> / ${max}</small></div>
     <div class="rows">${S.sections.map(s => { const sc = s.res.filter(Boolean).length; return `<div class="row"><span class="nm">${s.code} · ${s.name}</span><b>${sc} / ${s.qs.length}</b><span class="meter"><i style="width:${sc / s.qs.length * 100}%;background:var(--${s.key})"></i></span></div>`; }).join("")}</div>
-    <p class="muted">Every new attempt picks a different set of questions.</p>
+    <div class="lvls">${["easy", "medium", "hard"].map(d => { const all = S.sections.flatMap(s => s.qs.map((q, i) => [q, s.res[i]])).filter(([q]) => q.d === d); return `<span class="lvl ${d}">${d}</span> ${all.filter(x => x[1]).length} / ${all.length}`; }).join(" &nbsp; ")}</div>
+    <p class="muted">Every new attempt picks a different set from the 300-question banks.</p>
     <div class="btns"><button class="btn" id="again">Practise again with new questions</button><button class="btn ghost" id="home">Choose another grade</button></div>
   </section>`;
   document.getElementById("again").onclick = () => greet(S.grade);

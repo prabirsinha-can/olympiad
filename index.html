@@ -76,7 +76,10 @@ button:focus-visible { outline: 3px solid var(--acc); outline-offset: 3px; }
 
 .qhead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-top: 22px; }
 .qhead .subj { font-family: var(--f-display); font-size: 22px; color: var(--acc); font-weight: 800; }
-.qhead .count { color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+.qhead .count { color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; display: flex; gap: 10px; align-items: center; }
+.lvl { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; padding: 2px 9px; border-radius: 999px; border: 1.5px solid currentColor; }
+.lvl.easy { color: var(--ok); } .lvl.medium { color: var(--acc); } .lvl.hard { color: var(--bad); }
+.lvls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-variant-numeric: tabular-nums; }
 .dots { display: flex; gap: 6px; margin-top: 8px; }
 .dots i { flex: 1; height: 6px; border-radius: 3px; background: var(--line); }
 .dots i.ok { background: var(--ok); } .dots i.bad { background: var(--bad); } .dots i.cur { background: var(--acc); }
@@ -310,6 +313,885 @@ const BANK = {
 
 </script>
 <script>
+// Shared helpers for the question generators.
+// Each generator pushes questions into easy / medium / hard lists. The pool is built with a fixed seed,
+// so the same 300 questions per subject exist on every load; which 10 a child sees is random per run.
+// A question is { d, q, o, e, v, qv, k }: o[0] is the right answer, d is "easy" | "medium" | "hard".
+
+let R = Math.random;
+function seeded(seed) {
+  return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+}
+const ri = (a, b) => a + Math.floor(R() * (b - a + 1));
+const pick = a => a[Math.floor(R() * a.length)];
+const mix = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(R() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const pickN = (a, n) => mix(a).slice(0, n);
+const N = v => Number(v).toLocaleString("en-IN");
+const cap1 = s => s[0].toUpperCase() + s.slice(1);
+
+// Numeric options: the answer plus three distinct, non-negative near misses.
+function nums(ans, extra = [], fmt = N) {
+  const out = [ans], seen = new Set([ans]);
+  const tryAdd = c => { if (out.length < 4 && Number.isInteger(c) && c >= 0 && !seen.has(c)) { seen.add(c); out.push(c); } };
+  extra.forEach(tryAdd);
+  const step = ans >= 1000 ? 100 : ans >= 100 ? 10 : 1;
+  [1, -1, 2, -2, 10, -10, 3, -3, 5, -5, 20, -20].forEach(k => tryAdd(ans + k * step));
+  return out.map(fmt);
+}
+// Word options: the answer plus three others from a pool (excluding anything in `not`).
+function words(ans, pool, not = []) {
+  const bad = new Set([ans, ...not].map(s => String(s).toLowerCase()));
+  const uniq = [...new Set(pool)].filter(w => !bad.has(String(w).toLowerCase()));
+  return [ans, ...pickN(uniq, 3)];
+}
+
+const G = { 1: {}, 4: {} };   // G[grade][subject] = generator(add)
+function buildPool(grade, subj, hand, target = { easy: 120, medium: 120, hard: 60 }) {
+  R = seeded(grade * 1000 + subj.length * 97 + subj.charCodeAt(0));
+  const tiers = { easy: [], medium: [], hard: [] }, keys = new Set();
+  const add = (d, q) => {
+    q.d = d; q.o = q.o.map(String);
+    // Same question with the same answer counts once, even if the wrong options differ.
+    const key = q.q + "|" + q.o[0] + "|" + JSON.stringify(q.qv || "");
+    if (keys.has(key) || new Set(q.o).size !== 4) return;
+    keys.add(key); tiers[d].push(q);
+  };
+  hand.forEach(q => add(q.d || "medium", q));
+  const handN = { easy: tiers.easy.length, medium: tiers.medium.length, hard: tiers.hard.length };
+  G[grade][subj]((d, q, o, e, v, extra) => add(d, Object.assign({ q, o, e, v }, extra || {})));
+  const pool = { avail: { easy: tiers.easy.length, medium: tiers.medium.length, hard: tiers.hard.length } };
+  for (const d in tiers) {
+    const fixed = tiers[d].slice(0, handN[d]), rest = mix(tiers[d].slice(handN[d]));
+    pool[d] = fixed.concat(rest).slice(0, target[d]).map((q, i) => ({ ...q, id: `${grade}${subj}${d[0]}${i}` }));
+  }
+  R = Math.random;
+  return pool;
+}
+
+// IMO (Maths) generators for grades 1 and 4.
+const ICONS = ["🍎", "⭐", "🎈", "🐟", "🌸", "🍪", "🚗", "🐥"];
+const ICON_NAMES = { "🍎": "apples", "⭐": "stars", "🎈": "balloons", "🐟": "fish", "🌸": "flowers", "🍪": "cookies", "🚗": "cars", "🐥": "chicks" };
+const KIDS = ["Riya", "Aman", "Meera", "Kabir", "Tara", "Ishaan", "Zoya", "Arjun", "Anya", "Dev", "Sara", "Rohan"];
+const THINGS = [["apples", "🍎"], ["balloons", "🎈"], ["pencils", "✏️"], ["stars", "⭐"], ["fish", "🐟"], ["cookies", "🍪"], ["flowers", "🌸"], ["toy cars", "🚗"], ["marbles", "🔵"], ["books", "📘"]];
+const ONES = "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen".split(" ");
+const TENS = ",,twenty,thirty,forty,fifty,sixty,seventy,eighty,ninety".split(",");
+const name99 = n => n < 20 ? ONES[n] : TENS[Math.floor(n / 10)] + (n % 10 ? "-" + ONES[n % 10] : "");
+const name999 = n => (n >= 100 ? ONES[Math.floor(n / 100)] + " hundred" + (n % 100 ? " " : "") : "") + (n % 100 || n === 0 ? name99(n % 100) : "");
+const nameBig = n => (n >= 1000 ? name99(Math.floor(n / 1000)) + " thousand" + (n % 1000 ? " " : "") : "") + (n % 1000 ? name999(n % 1000) : "");
+const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const ROM = [[100, "C"], [90, "XC"], [50, "L"], [40, "XL"], [10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"]];
+const roman = n => { let s = ""; const parts = []; for (const [v, r] of ROM) { let c = 0; while (n >= v) { s += r; n -= v; c++; } if (c) parts.push([r.repeat(c), v * c]); } return { s, parts }; };
+const rupees = x => "₹" + N(x);
+const ord = n => n + (n === 1 ? "st" : n === 2 ? "nd" : n === 3 ? "rd" : "th");
+const factors = n => { const f = []; for (let i = 1; i <= n; i++) if (n % i === 0) f.push(i); return f; };
+
+G[1].imo = Q => {
+  // Addition: within 10 is easy, bridging 10 is medium.
+  for (let a = 1; a <= 9; a++) for (let b = 1; b <= 9; b++) {
+    const s = a + b, i = pick(ICONS);
+    if (s <= 10) Q("easy", `What is ${a} + ${b}?`, nums(s), `Put ${a} and ${b} together and count them all. ${a} + ${b} = ${s}.`, { t: "add", a, b, i });
+    else Q("medium", `What is ${a} + ${b}?`, nums(s), `Make 10 first: ${a} + ${10 - a} = 10. Then add the ${b - (10 - a)} left over: 10 + ${b - (10 - a)} = ${s}.`, { t: "add", a, b, i });
+  }
+  // Subtraction.
+  for (let a = 3; a <= 10; a++) for (let b = 1; b < a; b++) {
+    const i = pick(ICONS);
+    Q("easy", `What is ${a} − ${b}?`, nums(a - b), `Start with ${a}, take away ${b}, and count what is left: ${a - b}.`, { t: "sub", a, b, i });
+  }
+  for (let a = 11; a <= 18; a++) for (let b = a - 9; b <= 9; b++) {
+    if (b < 2) continue;
+    Q("medium", `What is ${a} − ${b}?`, nums(a - b), `Start at ${a} on the number line and jump back ${b} steps. You land on ${a - b}.`, { t: "numline", from: a - b - 1, to: a + 1, start: a, jumps: [-b] });
+  }
+  // Number order.
+  for (let n = 1; n <= 40; n++) {
+    Q("easy", `Which number comes just after ${n}?`, nums(n + 1, [n - 1, n + 10]), `Count on one more: after ${n} comes ${n + 1}.`, { t: "numline", from: Math.max(0, n - 3), to: Math.max(0, n - 3) + 7, start: n, jumps: [1] });
+    if (n > 1) Q("easy", `Which number comes just before ${n}?`, nums(n - 1, [n + 1, n - 10]), `Count back one: just before ${n} is ${n - 1}.`, { t: "numline", from: Math.max(0, n - 4), to: Math.max(0, n - 4) + 7, start: n, jumps: [-1] });
+  }
+  for (let n = 31; n <= 98; n += 2) Q("medium", `Which number comes between ${n - 1} and ${n + 1}?`, nums(n, [n + 2, n - 2, n + 10]), `${n} sits right in the middle of ${n - 1} and ${n + 1}.`, { t: "numline", from: n - 4, to: n + 3, mark: n });
+  // Counting pictures.
+  for (const i of ICONS) for (let n = 3; n <= 12; n += ri(1, 3)) {
+    Q("easy", `How many ${ICON_NAMES[i]} are there?`, nums(n), `Touch each one as you count: 1, 2, 3 … ${n}. There are ${n}.`, { t: "count", n, i }, { qv: { t: "count", n, i, plain: 1 } });
+  }
+  // Shapes.
+  const SH = [["triangle", 3], ["square", 4], ["rectangle", 4]];
+  SH.forEach(([s, n]) => {
+    Q("easy", `How many sides does a ${s} have?`, nums(n, [n - 1, n + 1, n + 2]), `Count the straight sides of a ${s}: ${n}.`, { t: "shape", name: s });
+    Q("easy", `How many corners does a ${s} have?`, nums(n, [n - 1, n + 1, n + 2]), `Count the corners (the dots): a ${s} has ${n}.`, { t: "shape", name: s });
+  });
+  Q("easy", "How many corners does a circle have?", ["0", "1", "2", "4"], "A circle is perfectly round. It has no corners and no straight sides.", { t: "shape", name: "circle" });
+  Q("medium", "Which shape has 3 sides?", ["Triangle", "Square", "Circle", "Rectangle"], "Tri means three. A triangle has 3 sides and 3 corners.", { t: "shape", name: "triangle" });
+  Q("medium", "Which shape has 4 equal sides?", ["Square", "Rectangle", "Triangle", "Circle"], "A square has 4 sides that are all the same length. A rectangle has 2 long and 2 short sides.", { t: "shape", name: "square" });
+  // Clocks.
+  for (let h = 1; h <= 12; h++) {
+    const nx = h % 12 + 1, pv = (h + 10) % 12 + 1;
+    Q("easy", "What time does this clock show?", [`${h} o'clock`, `${nx} o'clock`, `${pv} o'clock`, `12 o'clock`].filter((x, k, a) => a.indexOf(x) === k).concat(["6 o'clock", "9 o'clock"]).filter((x, k, a) => a.indexOf(x) === k).slice(0, 4),
+      `The long hand points to 12, so it is an exact hour. The short hand points to ${h}, so it is ${h} o'clock.`, { t: "clock", h, m: 0 }, { qv: { t: "clock", h, m: 0 } });
+    Q("medium", "What time does this clock show?", [`half past ${h}`, `half past ${nx}`, `${h} o'clock`, `${nx} o'clock`],
+      `The long hand points to 6, so it is half past. The short hand has just passed ${h}, so it is half past ${h}.`, { t: "clock", h, m: 30 }, { qv: { t: "clock", h, m: 30 } });
+  }
+  // Biggest / smallest.
+  for (let k = 0; k < 16; k++) {
+    const small = k < 8, set = pickN(Array.from({ length: small ? 20 : 89 }, (_, i) => i + (small ? 1 : 10)), 4), big = Math.max(...set), sm = Math.min(...set);
+    const hi = R() < .5;
+    const ans = hi ? big : sm;
+    Q(small ? "easy" : "medium", `Which is the ${hi ? "biggest" : "smallest"} number?`, [ans, ...set.filter(x => x !== ans)], small ? `Count up from 1: the ${hi ? "last" : "first"} one you reach is ${ans}.` : `Compare the tens digit first. ${ans} has the ${hi ? "most" : "fewest"} tens${set.some(x => x !== ans && Math.floor(x / 10) === Math.floor(ans / 10)) ? ", and then compare the ones" : ""}.`, { t: "bars", items: set.map(x => [String(x), x]), hl: set.indexOf(ans) });
+  }
+  // Tens and ones.
+  for (let k = 0; k < 24; k++) {
+    const n = ri(21, 98); if (n % 10 === 0 || Math.floor(n / 10) === n % 10) continue;
+    const t = Math.floor(n / 10), u = n % 10;
+    if (k % 3 === 0) Q("medium", `How many tens are there in ${n}?`, nums(t, [u, n, t + 1]), `${n} is ${t} tens and ${u} ones. Each tall stick is one ten.`, { t: "place", n });
+    else if (k % 3 === 1) Q("medium", `How many ones are there in ${n}?`, nums(u, [t, n, u + 1]), `${n} is ${t} tens and ${u} ones. The small squares are the ones.`, { t: "place", n });
+    else Q("medium", `${t} tens and ${u} ones make which number?`, [n, u * 10 + t, t + u, t * 100 + u], `${t} tens is ${t * 10}. Add ${u} ones: ${t * 10} + ${u} = ${n}.`, { t: "place", n });
+  }
+  // 10 more / 10 less.
+  for (let k = 0; k < 24; k++) {
+    const n = ri(12, 88), more = k % 2 === 0, ans = more ? n + 10 : n - 10;
+    Q("medium", `Which number is 10 ${more ? "more" : "less"} than ${n}?`, nums(ans, [more ? n + 1 : n - 1, more ? n - 10 : n + 10]), `${more ? "Adding" : "Taking away"} 10 changes only the tens digit: ${n} ${more ? "+" : "−"} 10 = ${ans}.`, { t: "numline", from: Math.floor(Math.min(n, ans) / 10) * 10, to: Math.floor(Math.min(n, ans) / 10) * 10 + 20, start: n, jumps: [more ? 10 : -10], every: 2 });
+  }
+  // Two-digit sums and differences.
+  for (let k = 0; k < 30; k++) {
+    const a = ri(11, 79), b = ri(1, 9);
+    if (a % 10 + b < 10) Q("medium", `What is ${a} + ${b}?`, nums(a + b, [a + b + 10]), `Only the ones change: ${a % 10} + ${b} = ${a % 10 + b}. So ${a} + ${b} = ${a + b}.`, { t: "numline", from: a - 1, to: a + b + 1, start: a, jumps: [b] });
+  }
+  for (let k = 0; k < 60; k++) {
+    const a = ri(11, 69), b = ri(11, 29), s = a + b, carry = a % 10 + b % 10 >= 10;
+    const a1 = Math.floor(a / 10), a0 = a % 10, b1 = Math.floor(b / 10), b0 = b % 10;
+    Q(carry ? "hard" : "medium", `What is ${a} + ${b}?`, nums(s, [carry ? s - 10 : s + 10, a1 + b1 + a0 + b0]),
+      `Add the tens: ${a1 * 10} + ${b1 * 10} = ${(a1 + b1) * 10}. Add the ones: ${a0} + ${b0} = ${a0 + b0}. Put them together: ${s}.`,
+      F(["", `${a1 * 10} + ${b1 * 10}`, `${(a1 + b1) * 10}`], ["", `${a0} + ${b0}`, `${a0 + b0}`], ["", "Total", `${s}`, 1]));
+  }
+  for (let k = 0; k < 60; k++) {
+    const a = ri(31, 99), b = ri(11, a - 5), d = a - b, borrow = a % 10 < b % 10;
+    const a1 = Math.floor(a / 10), a0 = a % 10, b1 = Math.floor(b / 10), b0 = b % 10;
+    if (!borrow) Q("medium", `What is ${a} − ${b}?`, nums(d, [d + 10, a1 - b1 + a0 - b0]), `Take away the tens: ${a1 * 10} − ${b1 * 10} = ${(a1 - b1) * 10}. Take away the ones: ${a0} − ${b0} = ${a0 - b0}. Together: ${d}.`,
+      F(["", `${a1 * 10} − ${b1 * 10}`, `${(a1 - b1) * 10}`], ["", `${a0} − ${b0}`, `${a0 - b0}`], ["", "Answer", `${d}`, 1]));
+    else Q("hard", `What is ${a} − ${b}?`, nums(d, [d + 10, Math.abs(a1 - b1) * 10 + Math.abs(a0 - b0)]), `${a0} is smaller than ${b0}, so borrow 1 ten: ${a} becomes ${a1 - 1} tens and ${a0 + 10} ones. Ones: ${a0 + 10} − ${b0} = ${a0 + 10 - b0}. Tens: ${(a1 - 1) * 10} − ${b1 * 10} = ${(a1 - 1 - b1) * 10}. Answer: ${d}.`,
+      F(["", "Borrow", `${a1 - 1} tens, ${a0 + 10} ones`], ["", `${a0 + 10} − ${b0}`, `${a0 + 10 - b0}`], ["", `${(a1 - 1) * 10} − ${b1 * 10}`, `${(a1 - 1 - b1) * 10}`], ["", "Answer", `${d}`, 1]));
+  }
+  // Skip counting.
+  for (let k = 0; k < 40; k++) {
+    const hard = k % 2 === 1, step = hard ? pick([3, 4, -2, -5, -10]) : pick([2, 5, 10]);
+    const start = step > 0 ? ri(0, 6) * (step === 10 ? 10 : step) : ri(6, 9) * Math.abs(step), seq = Array.from({ length: 5 }, (_, i) => start + i * step), miss = ri(1, 4);
+    if (seq.some(x => x < 0)) continue;
+    const shown = seq.map((x, i) => i === miss ? "__" : x).join(", ");
+    Q(hard ? "hard" : "medium", `Find the missing number: ${shown}`, nums(seq[miss], [seq[miss] + 1, seq[miss] - 1, seq[miss] + step]), `Each number is ${Math.abs(step)} ${step > 0 ? "more" : "less"} than the one before it. So the missing number is ${seq[miss]}.`, { t: "seq", items: seq.map(String), hl: miss, rule: (step > 0 ? "+" : "−") + Math.abs(step) });
+  }
+  // Word problems.
+  for (let k = 0; k < 40; k++) {
+    const [thing, i] = pick(THINGS), [p, q] = pickN(KIDS, 2);
+    if (k % 2) { const a = ri(3, 9), b = ri(2, 9); Q("medium", `${p} has ${a} ${thing}. ${q} gives ${p} ${b} more. How many ${thing} does ${p} have now?`, nums(a + b, [Math.abs(a - b)]), `"More" means add. ${a} + ${b} = ${a + b}.`, { t: "add", a, b, i }); }
+    else { const a = ri(6, 15), b = ri(2, a - 1); Q("medium", `${p} had ${a} ${thing}. ${p} gave ${b} to ${q}. How many ${thing} are left with ${p}?`, nums(a - b, [a + b]), `"Gave away" means take away. ${a} − ${b} = ${a - b}.`, { t: "sub", a, b, i }); }
+  }
+  for (let k = 0; k < 24; k++) {
+    const [thing] = pick(THINGS), a = ri(12, 45), b = ri(11, 40), s = a + b;
+    Q("hard", `A shop has ${a} ${thing} on one shelf and ${b} ${thing} on another shelf. How many ${thing} are there in all?`, nums(s, [s - 10, s + 10]), `"In all" means add: tens ${Math.floor(a / 10) * 10} + ${Math.floor(b / 10) * 10} = ${(Math.floor(a / 10) + Math.floor(b / 10)) * 10}, ones ${a % 10} + ${b % 10} = ${a % 10 + b % 10}. Total ${s}.`,
+      F(["", `${Math.floor(a / 10) * 10} + ${Math.floor(b / 10) * 10}`, `${(Math.floor(a / 10) + Math.floor(b / 10)) * 10}`], ["", `${a % 10} + ${b % 10}`, `${a % 10 + b % 10}`], ["", "In all", `${s}`, 1]));
+  }
+  // Equal groups.
+  for (let r = 2; r <= 5; r++) for (let c = 2; c <= 5; c++) {
+    const [thing, i] = pick(THINGS);
+    Q("hard", `There are ${r} plates with ${c} ${thing} on each plate. How many ${thing} are there in all?`, nums(r * c, [r + c, r * c + c]), `${r} groups of ${c}: count in ${c}s ${r} times. ${Array(r).fill(c).join(" + ")} = ${r * c}.`, { t: "array", r, c, i });
+  }
+  // Half and double.
+  for (let n = 2; n <= 20; n += 2) Q("medium", `What is half of ${n}?`, nums(n / 2, [n, n * 2, n / 2 + 2]), `Half means 2 equal groups. ${n} shared into 2 groups gives ${n / 2} in each.`, { t: "array", r: 2, c: n / 2, i: pick(ICONS), cap: `${n} in 2 equal groups = ${n / 2} each` });
+  for (let n = 2; n <= 9; n++) Q("medium", `What is double ${n}?`, nums(n * 2, [n + 1, n + 2]), `Double means two times the same number: ${n} + ${n} = ${n * 2}.`, { t: "add", a: n, b: n, i: pick(ICONS) });
+  // Money.
+  for (const v of [2, 5, 10]) for (let n = 2; n <= 6; n++) {
+    const p = pick(KIDS);
+    Q("hard", `${p} has ${n} coins of ₹${v}. How much money is that?`, nums(n * v, [n + v, n * v - v, n * v + v], rupees), `Count in ${v}s, one jump for each coin: ${Array.from({ length: n }, (_, i) => (i + 1) * v).join(", ")}. That is ₹${n * v}.`, { t: "numline", from: 0, to: n * v, step: v, start: 0, jumps: Array(n).fill(v) });
+  }
+  for (let k = 0; k < 10; k++) {
+    const a = ri(1, 3), b = ri(1, 3), s = a * 10 + b * 5;
+    Q("hard", `How much money is ${a} note${a > 1 ? "s" : ""} of ₹10 and ${b} coin${b > 1 ? "s" : ""} of ₹5?`, nums(s, [a + b, s + 5, s - 5], rupees), `₹10 × ${a} = ₹${a * 10} and ₹5 × ${b} = ₹${b * 5}. Together: ₹${s}.`, F(["💵", `${a} × ₹10`, `₹${a * 10}`], ["🪙", `${b} × ₹5`, `₹${b * 5}`], ["", "Total", `₹${s}`, 1]));
+  }
+  // Days of the week.
+  DAYS.forEach((d, i) => {
+    for (const n of [1, 2, 3, 5]) {
+      const ans = DAYS[(i + n) % 7], seq = Array.from({ length: n + 1 }, (_, j) => DAYS[(i + j) % 7].slice(0, 3));
+      Q(n <= 2 ? "medium" : "hard", `Today is ${d}. Which day will it be ${n === 1 ? "tomorrow" : `after ${n} days`}?`, words(ans, DAYS, [d]), `Count ${n} day${n > 1 ? "s" : ""} forward from ${d}: ${seq.slice(1).join(", ")}. It will be ${ans}.`, { t: "seq", items: seq, hl: n, rule: "+1" });
+    }
+    const y = DAYS[(i + 6) % 7];
+    Q("hard", `Today is ${d}. Which day was it yesterday?`, words(y, DAYS, [d]), `Yesterday is one day back. The day before ${d} is ${y}.`, { t: "seq", items: [y.slice(0, 3), d.slice(0, 3)], hl: 0, rule: "+1" });
+  });
+  // Missing addend.
+  for (let k = 0; k < 30; k++) {
+    const b = ri(2, 9), c = ri(b + 2, 18), a = c - b;
+    Q("hard", `Which number goes in the blank? __ + ${b} = ${c}`, nums(a, [c + b, c]), `Think: what plus ${b} makes ${c}? Count back ${b} from ${c}: ${c} − ${b} = ${a}.`, { t: "numline", from: a - 1, to: c + 1, start: a, jumps: [b], mark: c });
+  }
+  // Number names.
+  for (let k = 0; k < 30; k++) {
+    const n = ri(21, 99); if (n % 10 === 0 || n % 11 === 0) continue;
+    const rev = (n % 10) * 10 + Math.floor(n / 10);
+    if (k % 2) Q("medium", `Which number is "${name99(n)}"?`, [n, rev, Math.floor(n / 10) * 100 + n % 10, n + 1], `${cap1(name99(n))} means ${Math.floor(n / 10)} tens and ${n % 10} one${n % 10 === 1 ? "" : "s"}: ${n}.`, { t: "place", n });
+    else Q("hard", `How do we write ${n} in words?`, [name99(n), name99(rev), name99(n + 1 === rev ? n + 2 : n + 1), name99(n - 10)], `${n} has ${Math.floor(n / 10)} tens (${TENS[Math.floor(n / 10)]}) and ${n % 10} ones (${ONES[n % 10]}): ${name99(n)}.`, { t: "place", n });
+  }
+  // Odd and even.
+  for (let k = 0; k < 20; k++) {
+    const ev = ri(1, 25) * 2, odds = pickN(Array.from({ length: 25 }, (_, i) => i * 2 + 1), 3), wantEven = k % 2 === 0;
+    if (wantEven) Q("medium", "Which is an even number?", [ev, ...odds], `Even numbers end in 0, 2, 4, 6 or 8. ${ev} ends in ${ev % 10}, so it is even.`, C(["", `${ev}`, "even", 1], ...odds.map(o => ["", `${o}`, "odd"])));
+    else { const od = odds[0], evs = pickN(Array.from({ length: 25 }, (_, i) => i * 2 + 2), 3); Q("medium", "Which is an odd number?", [od, ...evs], `Odd numbers end in 1, 3, 5, 7 or 9. ${od} ends in ${od % 10}, so it is odd.`, C(["", `${od}`, "odd", 1], ...evs.map(o => ["", `${o}`, "even"]))); }
+  }
+  // Ordinal position.
+  const FRUIT = [["🍎", "apple"], ["🍌", "banana"], ["🍇", "grapes"], ["🍓", "strawberry"], ["🍊", "orange"], ["🍐", "pear"], ["🥭", "mango"]];
+  for (let k = 0; k < 30; k++) {
+    const row = pickN(FRUIT, 5), pos = ri(1, 5), right = k % 2 === 1, idx = right ? 5 - pos : pos - 1, ans = row[idx];
+    Q("hard", `Look at the row. Which fruit is ${ord(pos)} from the ${right ? "right" : "left"}?`, [ans[1], ...row.filter(f => f !== ans).slice(0, 3).map(f => f[1])],
+      `Start counting from the ${right ? "right" : "left"} end: ${Array.from({ length: pos }, (_, j) => row[right ? 4 - j : j][1]).join(", ")}. The ${ord(pos)} is the ${ans[1]}.`,
+      C(...row.map((f, j) => [f[0], f[1], right ? ord(5 - j) : ord(j + 1), j === idx])), { qv: C(...row.map(f => [f[0], "", ""])), k: 0 });
+  }
+  // Greater / less signs.
+  for (let k = 0; k < 20; k++) {
+    let a = ri(10, 99), b = ri(10, 99); if (a === b) b++;
+    const s = a > b ? ">" : "<";
+    Q("hard", `Which sign goes in the blank? ${a} __ ${b}`, [s, s === ">" ? "<" : ">", "=", "+"], `${Math.max(a, b)} is bigger than ${Math.min(a, b)}. The open side of the sign always faces the bigger number, so ${a} ${s} ${b}.`, { t: "bars", items: [[String(a), a], [String(b), b]], hl: a > b ? 0 : 1 }, { k: 1 });
+  }
+};
+
+G[4].imo = Q => {
+  const PL = ["ones", "tens", "hundreds", "thousands", "ten thousands", "lakhs"];
+  // Place value.
+  for (let k = 0; k < 60; k++) {
+    const len = k < 25 ? 4 : ri(5, 6), digits = pickN([1, 2, 3, 4, 5, 6, 7, 8, 9], len), n = digits.join(""), i = ri(0, len - 2), p = len - 1 - i, d = digits[i];
+    const vals = [0, 1, 2, 3, 4, 5].slice(0, len).map(x => d * 10 ** x);
+    Q(len === 4 ? "easy" : "medium", `What is the place value of ${d} in ${N(+n)}?`, [d * 10 ** p, ...pickN(vals.filter(v => v !== d * 10 ** p), 3)].map(N), `${d} is in the ${PL[p]} place, so its value is ${d} × ${N(10 ** p)} = ${N(d * 10 ** p)}.`, { t: "pv", n, i });
+  }
+  // Addition and subtraction with column method.
+  for (let k = 0; k < 50; k++) {
+    const a = ri(1000, 6999), b = ri(1000, 2999), s = a + b;
+    const carry = String(a).split("").some((x, j) => +x + +String(b)[j] >= 10);
+    Q(carry ? "medium" : "easy", `What is ${N(a)} + ${N(b)}?`, nums(s, [s - 10, s + 100, s - 1000]), `Add column by column from the ones${carry ? ", carrying 1 whenever a column adds up to 10 or more" : ""}. ${N(a)} + ${N(b)} = ${N(s)}.`, { t: "sum", rows: [String(a), "+ " + b], ans: String(s) });
+  }
+  for (let k = 0; k < 40; k++) {
+    const zeros = k % 3 === 0, a = zeros ? ri(2, 9) * 1000 : ri(3000, 9999), b = ri(1000, a - 500), d = a - b;
+    Q(zeros ? "hard" : "medium", `What is ${N(a)} − ${N(b)}?`, nums(d, [d + 10, d - 100, d + 1000]), `Subtract column by column from the ones, borrowing when the top digit is smaller${zeros ? ". With zeros, borrow from the thousands all the way down" : ""}. Check: ${N(d)} + ${N(b)} = ${N(a)}.`, { t: "sum", rows: [String(a), "− " + b], ans: String(d) });
+  }
+  // Successor / predecessor.
+  for (let k = 0; k < 20; k++) {
+    const n = ri(1, 9) * 10000 - (k % 2 ? 1 : 0) + (k % 4 === 0 ? ri(1, 900) : 0), after = k % 2 === 1;
+    const ans = after ? n + 1 : n - 1;
+    Q("easy", `Which number comes just ${after ? "after" : "before"} ${N(n)}?`, nums(ans, [after ? n - 1 : n + 1, ans + 10, ans - 10]), `${after ? "Add" : "Subtract"} 1: ${N(n)} ${after ? "+" : "−"} 1 = ${N(ans)}.`, F(["", N(n), ""], ["", after ? "+1" : "−1", ""], ["", N(ans), "", 1]));
+  }
+  // Multiplication.
+  for (let k = 0; k < 80; k++) {
+    const tier = k < 25 ? "easy" : k < 55 ? "medium" : "hard";
+    const a = tier === "easy" ? ri(12, 49) : tier === "medium" ? ri(102, 499) : ri(12, 49), b = tier === "hard" ? ri(12, 29) : ri(2, 9), p = a * b;
+    let v, e;
+    if (tier === "hard") { const b1 = Math.floor(b / 10) * 10, b0 = b % 10; v = F(["", `${a} × ${b1}`, N(a * b1)], ["", `${a} × ${b0}`, N(a * b0)], ["", "Total", N(p), 1]); e = `Split ${b} into ${b1} + ${b0}. ${a} × ${b1} = ${N(a * b1)} and ${a} × ${b0} = ${N(a * b0)}. Add: ${N(p)}.`; }
+    else { const parts = String(a).split("").map((x, j, arr) => +x * 10 ** (arr.length - 1 - j)).filter(Boolean); v = F(...parts.map(x => ["", `${N(x)} × ${b}`, N(x * b)]), ["", "Total", N(p), 1]); e = `Break ${a} into ${parts.map(N).join(" + ")}, multiply each part by ${b}, then add: ${parts.map(x => N(x * b)).join(" + ")} = ${N(p)}.`; }
+    Q(tier, `What is ${a} × ${b}?`, nums(p, [p + b, p - 10 * (b < 10 ? 1 : 0) - (b < 10 ? 0 : a), p + a]), e, v);
+  }
+  // Division.
+  for (let k = 0; k < 70; k++) {
+    const tier = k < 20 ? "easy" : k < 45 ? "medium" : "hard", b = ri(2, 9);
+    if (tier === "hard") {
+      const q = ri(12, 99), r = ri(1, b - 1), a = q * b + r;
+      Q("hard", `What is the remainder when ${a} is divided by ${b}?`, nums(r, [b, r + 1, 0]), `${b} × ${q} = ${b * q}, which is the biggest multiple of ${b} not more than ${a}. ${a} − ${b * q} = ${r} is left over.`, F(["", `${a} ÷ ${b}`, ""], ["", `${b} × ${q} = ${b * q}`, ""], ["", "Left over", `${r}`, 1]));
+    } else {
+      const q = tier === "easy" ? ri(11, 19) : ri(21, 99), a = q * b;
+      Q(tier, `What is ${N(a)} ÷ ${b}?`, nums(q, [q + 1, q - 1, q + 10]), `Division asks: ${b} times what makes ${N(a)}? Since ${b} × ${q} = ${N(a)}, the answer is ${q}.`, F(["", `${N(a)} ÷ ${b}`, ""], ["", `${b} × ? = ${N(a)}`, ""], ["", "?", `${q}`, 1]));
+    }
+  }
+  // Fractions.
+  for (let k = 0; k < 30; k++) {
+    const d = pick([2, 3, 4, 5, 6, 8, 10]), n = ri(1, d - 1), total = d * ri(2, 9), ans = total / d * n;
+    Q("medium", `What is ${n}/${d} of ${total}?`, nums(ans, [total / d, total - ans, ans + total / d]), `Split ${total} into ${d} equal parts. Each part is ${total / d}. Take ${n} part${n > 1 ? "s" : ""}: ${n} × ${total / d} = ${ans}.`, { t: "frac", n, d, total });
+  }
+  for (let k = 0; k < 24; k++) {
+    const d = ri(5, 10), ns = pickN(Array.from({ length: d - 1 }, (_, i) => i + 1), 4), big = k % 2 === 0, ans = big ? Math.max(...ns) : Math.min(...ns);
+    Q("easy", `Which fraction is the ${big ? "biggest" : "smallest"}?`, [ans, ...ns.filter(x => x !== ans)].map(x => `${x}/${d}`), `All have the same ${d} equal parts, so compare the top numbers. ${ans}/${d} has the ${big ? "most" : "fewest"} parts.`, { t: "frac", n: ans, d });
+  }
+  for (let k = 0; k < 20; k++) {
+    const nn = pick([1, 2, 3]), dd = pick([2, 3, 4, 5].filter(x => x > nn)), m = ri(2, 4), ans = `${nn * m}/${dd * m}`;
+    const wrongs = [`${nn * m}/${dd * m + 1}`, `${nn + m}/${dd + m}`, `${nn * m + 1}/${dd * m}`];
+    Q("hard", `Which fraction is equal to ${nn}/${dd}?`, [ans, ...wrongs], `Multiply the top and bottom by the same number. ${nn}/${dd} = ${nn} × ${m} / ${dd} × ${m} = ${ans}. The shaded part stays the same size.`, { t: "frac", n: nn * m, d: dd * m });
+  }
+  // Perimeter and area.
+  for (let k = 0; k < 50; k++) {
+    const w = ri(3, 12), h = ri(2, w - 1);
+    if (k < 15) Q("easy", `A rectangle is ${w} cm long and ${h} cm wide. What is its perimeter?`, nums(2 * (w + h), [w * h, w + h, 2 * w + h]).map(x => x + " cm"), `Perimeter is the distance all around: ${w} + ${h} + ${w} + ${h} = ${2 * (w + h)} cm.`, { t: "rect", w, h });
+    else if (k < 30) Q("medium", `What is the area of a rectangle ${w} cm long and ${h} cm wide?`, nums(w * h, [2 * (w + h), w + h, w * h + w]).map(x => x + " sq cm"), `Area counts the unit squares inside: ${h} rows of ${w} = ${w} × ${h} = ${w * h} square cm.`, { t: "rect", w, h, grid: w * h <= 80 ? 1 : 0 });
+    else if (k < 38) { const s = ri(3, 15); Q("medium", `What is the perimeter of a square with side ${s} cm?`, nums(4 * s, [s * s, 2 * s, 4 * s + 4]).map(x => x + " cm"), `A square has 4 equal sides: 4 × ${s} = ${4 * s} cm.`, { t: "rect", w: s, h: s }); }
+    else { const P = 2 * (w + h); Q("hard", `A rectangle has a perimeter of ${P} cm. Its length is ${w} cm. What is its width?`, nums(h, [P - w, P / 2, w - h > 0 && w - h !== h ? w - h : h + 2]).map(x => x + " cm"), `Length + width is half the perimeter: ${P} ÷ 2 = ${P / 2}. So width = ${P / 2} − ${w} = ${h} cm.`, { t: "rect", w, h }); }
+  }
+  // Rounding.
+  for (let k = 0; k < 45; k++) {
+    const to = k < 15 ? 10 : k < 30 ? 100 : 1000, tier = to === 10 ? "easy" : to === 100 ? "medium" : "hard";
+    let n = to === 10 ? ri(11, 999) : to === 100 ? ri(101, 9999) : ri(1001, 99999); if (n % to === 0) n++;
+    const lo = Math.floor(n / to) * to, hi = lo + to, ans = n - lo >= to / 2 ? hi : lo;
+    Q(tier, `Round ${N(n)} to the nearest ${to === 10 ? "ten" : to === 100 ? "hundred" : "thousand"}.`, [ans, ans === hi ? lo : hi, Math.round(n / (to / 10)) * (to / 10) === ans ? ans + to * 2 : Math.round(n / (to / 10)) * (to / 10), ans === hi ? hi + to : lo - to].map(N),
+      `${N(n)} lies between ${N(lo)} and ${N(hi)}. The halfway mark is ${N(lo + to / 2)}, and ${N(n)} is ${n >= lo + to / 2 ? "on or past" : "before"} it, so it rounds ${ans === hi ? "up" : "down"} to ${N(ans)}.`, { t: "numline", from: lo, to: hi, step: to / 10, every: 5, mark: n });
+  }
+  // Roman numerals.
+  for (let k = 0; k < 40; k++) {
+    const n = k < 20 ? ri(4, 39) : ri(40, 100), r = roman(n), tier = n < 40 ? "medium" : "hard";
+    const v = F(...r.parts.map(([s, x]) => ["", s, String(x)]), ["", r.s, String(n), 1]);
+    if (k % 2) Q(tier, `What is the Roman numeral ${r.s} in numbers?`, nums(n, [n + 2, n - 2, n + 10]), `Break it into parts: ${r.parts.map(([s, x]) => `${s} = ${x}`).join(", ")}. Add them: ${n}.`, v);
+    else Q(tier, `How is ${n} written in Roman numerals?`, [r.s, roman(n + 1).s, roman(Math.max(1, n - 1)).s, roman(n + 10 > 100 ? n - 10 : n + 10).s], `${n} = ${r.parts.map(([, x]) => x).join(" + ")} = ${r.parts.map(([s]) => s).join(" + ")} = ${r.s}.`, v);
+  }
+  // Time and measurement.
+  for (let h = 2; h <= 9; h++) Q("easy", `How many minutes are there in ${h} hours?`, nums(h * 60, [h * 100, h * 30, h * 60 + 60]), `1 hour = 60 minutes, so ${h} hours = ${h} × 60 = ${h * 60} minutes.`, F(["⏰", "1 hour", "60 min"], ["", `× ${h}`, ""], ["", `${h * 60} min`, "", 1]));
+  for (let w = 2; w <= 8; w++) Q("easy", `How many days are there in ${w} weeks?`, nums(w * 7, [w * 5, w * 10, w * 7 + 7]), `1 week = 7 days, so ${w} weeks = ${w} × 7 = ${w * 7} days.`, F(["📅", "1 week", "7 days"], ["", `× ${w}`, ""], ["", `${w * 7} days`, "", 1]));
+  const UNITS = [["metres", "centimetres", 100], ["kilometres", "metres", 1000], ["kilograms", "grams", 1000], ["litres", "millilitres", 1000]];
+  for (let k = 0; k < 32; k++) {
+    const [big, small, f] = UNITS[k % 4], n = ri(2, 9);
+    if (k < 16) Q(k < 8 ? "easy" : "medium", `How many ${small} are there in ${n} ${big}?`, nums(n * f, [n * f / 10, n * f * 10, n * 100 === n * f ? n * 1000 : n * 100]), `1 ${big.slice(0, -1)} = ${N(f)} ${small}, so ${n} ${big} = ${n} × ${N(f)} = ${N(n * f)} ${small}.`, F(["", `1 ${big.slice(0, -1)}`, `${N(f)} ${small}`], ["", `× ${n}`, ""], ["", `${N(n * f)}`, small, 1]));
+    else { const m = ri(5, f === 100 ? 95 : 950), tot = n * f + m; Q("hard", `${n} ${big} ${m} ${small} = how many ${small}?`, nums(tot, [n * 100 + m === tot ? n * 1000 + m : n * 100 + m, n * 10 + m, tot + f]), `${n} ${big} = ${N(n * f)} ${small}. Add the ${m}: ${N(n * f)} + ${m} = ${N(tot)} ${small}.`, F(["", `${n} ${big}`, `${N(n * f)}`], ["", `+ ${m}`, small], ["", N(tot), small, 1])); }
+  }
+  for (let k = 0; k < 20; k++) {
+    const sh = ri(1, 10), sm = pick([0, 15, 30, 45]), dh = ri(1, 2), dm = pick([15, 20, 30, 40, 45]);
+    let em = sm + dm, eh = sh + dh; if (em >= 60) { em -= 60; eh++; }
+    const fmtT = (h, m) => `${(h - 1) % 12 + 1}:${String(m).padStart(2, "0")}`;
+    const ans = fmtT(eh, em);
+    Q("hard", `A class starts at ${fmtT(sh, sm)} and lasts ${dh} hour${dh > 1 ? "s" : ""} ${dm} minutes. When does it end?`, [ans, fmtT(eh, (em + 30) % 60 === em ? em : (em + 30) % 60), fmtT(eh - 1, em), fmtT(eh + 1, em)].filter((x, i, a) => a.indexOf(x) === i).concat([fmtT(eh, (em + 15) % 60)]).filter((x, i, a) => a.indexOf(x) === i).slice(0, 4),
+      `Add the hours first: ${fmtT(sh, sm)} + ${dh} h = ${fmtT(sh + dh, sm)}. Then add ${dm} minutes${sm + dm >= 60 ? ", which crosses into the next hour" : ""}: ${ans}.`, F(["🕒", fmtT(sh, sm), "start"], ["", `+${dh} h`, fmtT(sh + dh, sm)], ["", `+${dm} min`, ans, 1]));
+  }
+  // Patterns.
+  for (let k = 0; k < 40; k++) {
+    const tier = k < 14 ? "easy" : k < 28 ? "medium" : "hard"; let seq, rule;
+    if (tier === "easy") { const s = ri(3, 30), st = ri(3, 25); seq = Array.from({ length: 5 }, (_, i) => s + i * st); rule = "+" + st; }
+    else if (tier === "medium") { const s = ri(1, 6), m = pick([2, 3]); seq = Array.from({ length: 5 }, (_, i) => s * m ** i); rule = "×" + m; }
+    else if (k % 2) { const s = ri(1, 5); seq = Array.from({ length: 5 }, (_, i) => (s + i) ** 2); rule = "squares"; }
+    else { const s = ri(1, 10); seq = [s]; for (let i = 1; i < 5; i++) seq.push(seq[i - 1] + i); rule = "+1, +2, +3…"; }
+    const ans = seq[4];
+    Q(tier, `What comes next? ${seq.slice(0, 4).join(", ")}, __`, nums(ans, [seq[3] + (seq[3] - seq[2]), ans + 1, ans - 1]),
+      rule === "squares" ? `These are square numbers: ${seq.map((x, i) => `${Math.sqrt(x)}×${Math.sqrt(x)}`).slice(0, 4).join(", ")}. Next is ${Math.sqrt(ans)} × ${Math.sqrt(ans)} = ${ans}.` : rule.startsWith("+1") ? `The gap grows by 1 each time: +1, +2, +3, then +4. ${seq[3]} + 4 = ${ans}.` : `The rule is ${rule} each time. ${seq[3]} ${rule[0]} ${rule.slice(1)} = ${ans}.`,
+      { t: "seq", items: seq.map(String), hl: 4, rule: rule.length > 4 ? "" : rule });
+  }
+  // Multiples and factors.
+  for (let k = 0; k < 30; k++) {
+    const m = ri(3, 12);
+    if (k % 2 === 0) {
+      const ans = m * ri(3, 12), w = []; while (w.length < 3) { const c = ri(10, 140); if (c % m && !w.includes(c)) w.push(c); }
+      Q("medium", `Which of these is a multiple of ${m}?`, [ans, ...w], `A multiple of ${m} is in the ${m} times table. ${m} × ${ans / m} = ${ans}.`, C(["", `${ans}`, `${m} × ${ans / m}`, 1], ...w.map(x => ["", `${x}`, `not in the ${m} table`])));
+    } else {
+      const n = pick([12, 18, 20, 24, 28, 30, 36, 40, 42, 45, 48, 60, 72]), fs = factors(n), non = []; while (non.length < 1) { const c = ri(3, n - 1); if (n % c) non.push(c); }
+      Q("hard", `Which number is NOT a factor of ${n}?`, [non[0], ...pickN(fs.filter(f => f > 1 && f < n), 3)], `Factors of ${n} divide it exactly: ${fs.join(", ")}. ${non[0]} is not in the list (${n} ÷ ${non[0]} leaves a remainder).`, C(...fs.map(f => ["", `${f}`, ""]), ["", `${non[0]}`, "not a factor", 1]));
+    }
+  }
+  // Money.
+  const ITEMS = [["pen", "🖊️"], ["notebook", "📒"], ["eraser", "🧽"], ["toy car", "🚗"], ["ice cream", "🍦"], ["pencil box", "🧰"]];
+  for (let k = 0; k < 40; k++) {
+    const [it, e] = pick(ITEMS), price = ri(6, 45), n = ri(3, 9), cost = price * n;
+    if (k % 2 === 0) Q("medium", `One ${it} costs ₹${price}. What is the cost of ${n} ${it}s?`, nums(cost, [price + n, cost - price, cost + price], rupees), `Cost of ${n} = ${n} × ₹${price} = ₹${cost}.`, F([e, `1 ${it}`, `₹${price}`], ["", `× ${n}`, ""], ["", "Total", `₹${cost}`, 1]));
+    else { const note = cost < 100 ? 100 : cost < 200 ? 200 : 500; Q("hard", `Meera buys ${n} ${it}s at ₹${price} each and pays with a ₹${note} note. How much change does she get?`, nums(note - cost, [note - price * (n - 1), cost, note - cost + 10], rupees), `Cost = ${n} × ₹${price} = ₹${cost}. Change = ₹${note} − ₹${cost} = ₹${note - cost}.`, F([e, "Cost", `₹${cost}`], ["💵", "Paid", `₹${note}`], ["", "Change", `₹${note - cost}`, 1])); }
+  }
+  // Angles.
+  for (const deg of [30, 45, 60, 75, 90, 120, 135, 150, 180]) {
+    const ans = deg < 90 ? "Acute angle" : deg === 90 ? "Right angle" : deg < 180 ? "Obtuse angle" : "Straight angle";
+    Q("easy", `What kind of angle is this?`, ["Acute angle", "Right angle", "Obtuse angle", "Straight angle"].sort((a, b) => (b === ans) - (a === ans)), `${deg}° is ${deg < 90 ? "less than 90°, so it is acute" : deg === 90 ? "exactly 90°, a square corner" : deg < 180 ? "more than 90° but less than 180°, so it is obtuse" : "exactly 180°, a straight line"}.`, { t: "angle", deg }, { qv: { t: "angle", deg } });
+  }
+  // Decimals.
+  for (let k = 0; k < 24; k++) {
+    const a = ri(105, 899) / 100, b = ri(105, 499) / 100, s = Math.round((a + b) * 100) / 100, f = x => x.toFixed(2);
+    if (k % 2) Q("hard", `What is ${f(a)} + ${f(b)}?`, [s, s + 0.1, s - 1, s + 1].map(f), `Line up the decimal points and add like whole numbers, then put the point back: ${f(a)} + ${f(b)} = ${f(s)}.`, { t: "sum", rows: [f(a), "+ " + f(b)], ans: f(s) });
+    else { const t = ri(3, 8) / 10, opts = [t, t - 0.05, t - 0.01, t - 0.1].map(v => String(+v.toFixed(2))); Q("hard", "Which decimal is the biggest?", opts, `Compare the tenths digit first. ${opts[0]} = ${(+opts[0]).toFixed(2)} has the most tenths. ${opts[2]} looks bigger because it has more digits, but ${(+opts[2]).toFixed(2)} is less than ${(+opts[0]).toFixed(2)}.`, C(...opts.map((o, j) => ["", o, `= ${(+o).toFixed(2)}`, j === 0]))); }
+  }
+  // Bar graph reading.
+  const BL = [["Mon", "Tue", "Wed", "Thu"], ["Red", "Blue", "Green", "Pink"], ["Apples", "Mangoes", "Kiwis", "Plums"]];
+  for (let k = 0; k < 30; k++) {
+    const labels = pick(BL), vals = pickN([2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], 4), items = labels.map((l, i) => [l, vals[i]]), mx = vals.indexOf(Math.max(...vals)), mn = vals.indexOf(Math.min(...vals));
+    const kind = k % 3;
+    if (kind === 0) Q("medium", "Look at the bar graph. Which bar is the tallest?", [labels[mx], ...labels.filter((_, i) => i !== mx)], `${labels[mx]} has the tallest bar, with ${vals[mx]}.`, { t: "bars", items, hl: mx }, { qv: { t: "bars", items } });
+    else if (kind === 1) { const t = vals.reduce((a, b) => a + b); Q("hard", "Look at the bar graph. What is the total of all the bars?", nums(t, [t - vals[0], t + 2, t - 3]), `Add every bar: ${vals.join(" + ")} = ${t}.`, { t: "bars", items }, { qv: { t: "bars", items } }); }
+    else { const d = vals[mx] - vals[mn]; Q("hard", `How many more is ${labels[mx]} than ${labels[mn]}?`, nums(d, [vals[mx] + vals[mn], d + 1, d - 1]), `${labels[mx]} is ${vals[mx]} and ${labels[mn]} is ${vals[mn]}. Difference: ${vals[mx]} − ${vals[mn]} = ${d}.`, { t: "bars", items, hl: mx }, { qv: { t: "bars", items } }); }
+  }
+  // Number names.
+  for (let k = 0; k < 20; k++) {
+    const n = ri(10, 99) * 1000 + ri(1, 9) * 100 + ri(0, 9);
+    const th = Math.floor(n / 1000), hu = Math.floor(n % 1000 / 100), te = Math.floor(n % 100 / 10), on = n % 10;
+    Q(k % 2 ? "medium" : "hard", `Which number is "${nameBig(n)}"?`, [n, n + 90, n - hu * 100 + te * 100 - te * 10 + hu * 10 === n ? n + 900 : n - hu * 100 + te * 100 - te * 10 + hu * 10, n + 10000 > 99999 ? n - 10000 : n + 10000].map(N), `${cap1(nameBig(n))} means ${th} thousands, ${hu} hundreds, ${te} tens and ${on} ones = ${N(n)}.`, F(["", "Thousands", `${th}`], ["", "Hundreds", `${hu}`], ["", "Tens", `${te}`], ["", "Ones", `${on}`], ["", N(n), "", 1]));
+  }
+  // Largest / smallest from digits.
+  for (let k = 0; k < 24; k++) {
+    const ds = pickN([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], 4), big = k % 2 === 0, sorted = ds.slice().sort((a, b) => a - b);
+    let ans;
+    if (big) ans = +sorted.slice().reverse().join("");
+    else { const nz = sorted.find(x => x > 0), rest = sorted.slice(); rest.splice(rest.indexOf(nz), 1); ans = +[nz, ...rest].join(""); }
+    const alt = +ds.join("") === ans ? +ds.slice().reverse().join("") : +ds.join("");
+    Q("hard", `What is the ${big ? "largest" : "smallest"} 4-digit number made using ${ds.join(", ")} once each?`, nums(ans, [alt, big ? ans - 9 : ans + 9, big ? +sorted.slice(0, 2).reverse().concat(sorted.slice(2).reverse()).join("") : ans + 90].filter(x => x >= 1000)),
+      big ? `Put the biggest digit first and keep going down: ${sorted.slice().reverse().join(", ")} gives ${N(ans)}.` : `A 4-digit number can't start with 0. Put the smallest non-zero digit first, then the rest from smallest to biggest: ${N(ans)}.`, { t: "seq", items: String(ans).split(""), hl: 0 });
+  }
+};
+
+// NSO (Science) generators for grades 1 and 4. Facts live in small tables; each template asks about one fact.
+
+// name, emoji, baby, home, sound, move, legs, gives
+const ANIMALS = [
+  ["dog", "🐕", "puppy", "kennel", "bark", "walk", 4], ["cat", "🐈", "kitten", "", "mew", "walk", 4],
+  ["cow", "🐄", "calf", "cowshed", "moo", "walk", 4, "milk"], ["goat", "🐐", "kid", "", "bleat", "walk", 4, "milk"],
+  ["sheep", "🐑", "lamb", "", "baa", "walk", 4, "wool"], ["horse", "🐎", "foal", "stable", "neigh", "walk", 4],
+  ["hen", "🐔", "chick", "coop", "cluck", "walk", 2, "eggs"], ["duck", "🦆", "duckling", "", "quack", "", 2, "eggs"],
+  ["lion", "🦁", "cub", "den", "roar", "walk", 4], ["elephant", "🐘", "calf", "", "trumpet", "walk", 4],
+  ["frog", "🐸", "tadpole", "", "croak", "hop", 4], ["sparrow", "🐦", "", "nest", "chirp", "fly", 2],
+  ["bee", "🐝", "", "hive", "buzz", "fly", 6, "honey"], ["spider", "🕷️", "", "web", "", "crawl", 8],
+  ["rabbit", "🐇", "", "burrow", "", "hop", 4], ["snake", "🐍", "", "", "hiss", "crawl", 0],
+  ["mouse", "🐭", "", "", "squeak", "walk", 4], ["owl", "🦉", "owlet", "", "hoot", "fly", 2],
+  ["pig", "🐖", "piglet", "sty", "grunt", "walk", 4], ["fish", "🐟", "", "", "", "swim", 0],
+  ["kangaroo", "🦘", "joey", "", "", "hop"], ["butterfly", "🦋", "caterpillar", "", "", "fly", 6],
+  ["earthworm", "🪱", "", "", "", "crawl", 0], ["snail", "🐌", "", "", "", "crawl", 0],
+  ["eagle", "🦅", "", "", "", "fly", 2], ["dolphin", "🐬", "", "", "", "swim", 0],
+  ["tiger", "🐅", "cub", "", "", "walk", 4], ["bear", "🐻", "cub", "", "", "walk", 4], ["camel", "🐫", "", "", "", "walk", 4],
+  ["ant", "🐜", "", "", "", "", 6],
+].map(([n, e, baby, home, sound, move, legs, gives]) => ({ n, e, baby, home, sound, move, legs, gives }));
+const A = n => ANIMALS.find(a => a.n === n);
+const an = w => (/^[aeiou]/i.test(w) ? "an " : "a ") + w;
+const card = (a, sub, ok) => [a.e, cap1(a.n), sub || "", ok];
+
+const FRUITS = [["🍎", "apple"], ["🍌", "banana"], ["🥭", "mango"], ["🍇", "grapes"], ["🍊", "orange"], ["🍍", "pineapple"], ["🍉", "watermelon"], ["🍓", "strawberry"], ["🍐", "pear"], ["🍒", "cherry"], ["🥝", "kiwi"], ["🍑", "peach"]];
+const VEGS = [["🥕", "carrot"], ["🥔", "potato"], ["🧅", "onion"], ["🧄", "garlic"], ["🥬", "spinach"], ["🥦", "broccoli"], ["🍠", "sweet potato"], ["🌶️", "chilli"]];
+const HEALTHY = [["🥛", "milk"], ["🍎", "apple"], ["🥕", "carrot"], ["🥚", "egg"], ["🍌", "banana"], ["🥗", "salad"], ["🍲", "dal"], ["🥜", "nuts"]];
+const JUNK = [["🍟", "chips"], ["🍬", "candy"], ["🥤", "cola"], ["🍩", "doughnut"], ["🍭", "lollipop"], ["🍫", "chocolate bar"]];
+const LIVING = [["🌳", "tree"], ["🐕", "dog"], ["🐦", "bird"], ["🌻", "sunflower"], ["🐟", "fish"], ["👶", "baby"], ["🦋", "butterfly"], ["🌱", "plant"], ["🐜", "ant"], ["🐄", "cow"]];
+const NONLIVING = [["🪨", "stone"], ["🪑", "chair"], ["🚗", "car"], ["⚽", "ball"], ["📘", "book"], ["✏️", "pencil"], ["☕", "cup"], ["🧸", "teddy bear"], ["⏰", "clock"], ["🚲", "bicycle"]];
+const SENSES = [["👀", "eyes", "see"], ["👂", "ears", "hear"], ["👃", "nose", "smell"], ["👅", "tongue", "taste"], ["✋", "skin", "feel touch"]];
+const TRANSPORT = { land: [["🚗", "car"], ["🚌", "bus"], ["🚆", "train"], ["🚲", "bicycle"], ["🛵", "scooter"], ["🚚", "truck"]], water: [["🚢", "ship"], ["⛵", "sailboat"], ["⛴️", "ferry"], ["🛶", "canoe"]], air: [["✈️", "aeroplane"], ["🚁", "helicopter"], ["🎈", "hot-air balloon"]] };
+const MATERIAL = [["🚪", "door", "wood"], ["🏏", "cricket bat", "wood"], ["🪟", "window pane", "glass"], ["🪞", "mirror", "glass"], ["🔑", "key", "metal"], ["🪙", "coin", "metal"], ["📖", "book", "paper"], ["📰", "newspaper", "paper"], ["👕", "shirt", "cloth"], ["🧦", "socks", "cloth"], ["🎈", "balloon", "rubber"], ["🛞", "tyre", "rubber"], ["🪥", "toothbrush", "plastic"]];
+const FLOATS = [["🍃", "leaf"], ["🪶", "feather"], ["⛵", "paper boat"], ["🪵", "piece of wood"], ["⚽", "plastic ball"], ["🧽", "sponge"]];
+const SINKS = [["🪨", "stone"], ["🪙", "coin"], ["🔑", "key"], ["🔩", "iron nail"], ["🥄", "steel spoon"]];
+const PETS = [["🐕", "dog"], ["🐈", "cat"], ["🦜", "parrot"], ["🐠", "goldfish"]], FARM = [["🐄", "cow"], ["🐐", "goat"], ["🐑", "sheep"], ["🐔", "hen"], ["🐖", "pig"]], WILD = [["🦁", "lion"], ["🐅", "tiger"], ["🐻", "bear"], ["🐺", "wolf"], ["🦊", "fox"], ["🦓", "zebra"], ["🦒", "giraffe"]];
+
+// Short authored questions: [difficulty, question, [right, wrong, wrong, wrong], explanation, cards]
+const S1 = [
+  ["medium", "Which part of a plant holds it firmly in the soil?", ["Root", "Leaf", "Flower", "Fruit"], "Roots spread under the soil and hold the plant firmly so wind can't knock it over.", { t: "plant", hl: "root" }],
+  ["medium", "Which part of a plant makes food?", ["Leaf", "Root", "Stem", "Seed"], "Green leaves use sunlight, air and water to make food for the whole plant.", { t: "plant", hl: "leaf" }],
+  ["medium", "Which part of a plant carries water from the roots to the leaves?", ["Stem", "Flower", "Seed", "Fruit"], "The stem is like a pipe. It carries water up from the roots to the leaves.", { t: "plant", hl: "stem" }],
+  ["hard", "Which part of a plant turns into a fruit?", ["Flower", "Root", "Leaf", "Stem"], "After a flower blooms, it slowly turns into a fruit with seeds inside.", { t: "plant", hl: "flower" }],
+  ["medium", "What grows into a new plant?", ["Seed", "Stone", "Leaf", "Petal"], "A seed has a tiny baby plant inside. With water, air and warmth it grows into a new plant.", F(["🌰", "Seed", ""], ["🌱", "Sprout", ""], ["🌳", "Plant", "", 1])],
+  ["easy", "When can we see the Sun in the sky?", ["In the day", "At night", "Never", "Only when it rains"], "The Sun lights up the sky during the day. At night our side of the Earth faces away from it.", C(["☀️", "Day", "Sun", 1], ["🌙", "Night", "Moon and stars"])],
+  ["easy", "What do we see in the sky at night?", ["Moon and stars", "Rainbow", "Sun", "Clouds of smoke"], "At night the sky is dark, and we can see the Moon and twinkling stars.", C(["🌙", "Moon", "night", 1], ["⭐", "Stars", "night", 1], ["☀️", "Sun", "day"])],
+  ["medium", "In which direction does the Sun rise?", ["East", "West", "North", "South"], "The Sun rises in the east every morning and sets in the west in the evening.", F(["🌅", "East", "rises", 1], ["☀️", "Sky", "noon"], ["🌇", "West", "sets"])],
+  ["hard", "Which of these is a star?", ["The Sun", "The Moon", "The Earth", "A cloud"], "The Sun is a star. It is the closest star to us, so it looks much bigger and brighter than other stars.", C(["☀️", "Sun", "a star", 1], ["🌙", "Moon", "no light of its own"], ["🌍", "Earth", "a planet"])],
+  ["easy", "In which season do we use an umbrella the most?", ["Rainy season", "Winter", "Summer", "Spring"], "In the rainy season it rains a lot, so an umbrella keeps us dry.", C(["🌧️", "Rainy", "umbrella", 1], ["❄️", "Winter", "sweater"], ["☀️", "Summer", "cap"])],
+  ["easy", "When do we wear woollen sweaters?", ["Winter", "Summer", "Rainy season", "Spring"], "Wool keeps our body warm, so we wear sweaters when it is cold in winter.", C(["❄️", "Winter", "sweater", 1], ["☀️", "Summer", "cotton"])],
+  ["medium", "Which clothes keep us cool in summer?", ["Cotton clothes", "Woollen clothes", "Raincoats", "Leather jackets"], "Cotton lets air pass through and soaks up sweat, so it keeps us cool in hot weather.", C(["👕", "Cotton", "summer", 1], ["🧶", "Wool", "winter"], ["🧥", "Raincoat", "rain"])],
+  ["medium", "We can fly a kite well when it is ___.", ["Windy", "Raining", "Very still", "Night"], "Moving air (wind) pushes the kite up and keeps it flying.", F(["🌬️", "Wind", "moving air", 1], ["🪁", "Kite", "flies"])],
+  ["hard", "When do we see a rainbow?", ["When the Sun shines during rain", "At midnight", "When it snows", "When it is very dark"], "Sunlight passing through raindrops splits into seven colours, making a rainbow.", F(["☀️", "Sunlight", ""], ["🌧️", "Raindrops", ""], ["🌈", "Rainbow", "", 1])],
+  ["easy", "What do we need to breathe?", ["Air", "Sand", "Juice", "Stones"], "Air is all around us. We breathe it in through our nose all the time.", F(["🌬️", "Air", "", 1], ["👃", "Nose", "breathe in"])],
+  ["medium", "Where do we get rain from?", ["Clouds", "Trees", "Mountains", "The Sun"], "Tiny water drops collect in clouds. When the drops get heavy they fall as rain.", F(["☁️", "Clouds", ""], ["🌧️", "Rain", "", 1])],
+  ["medium", "What happens to water when it gets very cold?", ["It turns into ice", "It turns into air", "It turns into sand", "It becomes hot"], "When water becomes very cold it freezes into solid ice.", F(["💧", "Water", ""], ["❄️", "Very cold", ""], ["🧊", "Ice", "", 1])],
+  ["easy", "Where should we cross the road?", ["At the zebra crossing", "Anywhere", "In the middle of traffic", "Behind a bus"], "The zebra crossing is the safe place to cross. Look right, left and right again first.", C(["🦓", "Zebra crossing", "safe", 1], ["🚗", "Busy road", "unsafe"])],
+  ["medium", "Why should we not touch switches with wet hands?", ["We can get an electric shock", "The switch gets dirty", "It makes noise", "The light turns blue"], "Water lets electricity pass through. Touching switches with wet hands can give a shock.", C(["💧", "Wet hands", "danger", 1], ["🔌", "Switch", ""])],
+  ["easy", "When should we wash our hands?", ["Before eating", "Only once a week", "Never", "Only after sleeping"], "Washing hands with soap before eating removes germs that can make us sick.", F(["🧼", "Soap", ""], ["🙌", "Clean hands", ""], ["🍽️", "Eat", "", 1])],
+  ["medium", "What should we wear when riding a bicycle?", ["A helmet", "A raincoat", "A scarf", "Sunglasses only"], "A helmet protects our head if we fall.", C(["⛑️", "Helmet", "protects head", 1], ["🚲", "Bicycle", ""])],
+  ["hard", "Which of these should we NOT play with?", ["Matchsticks", "A ball", "Building blocks", "A skipping rope"], "Matchsticks can start a fire and burn us. They are not toys.", C(["🔥", "Matchsticks", "danger", 1], ["⚽", "Ball", "safe"], ["🧱", "Blocks", "safe"])],
+  ["easy", "How many times should we brush our teeth every day?", ["Two", "One", "Five", "None"], "Brush in the morning and at night, two times every day.", C(["🌅", "Morning", "brush", 1], ["🌙", "Night", "brush", 1])],
+  ["medium", "Which of these is a tree?", ["Mango", "Grass", "Money plant", "Rose"], "A tree is big and has a thick, strong trunk. A mango tree is a tree. A rose is a shrub and grass is a herb.", C(["🌳", "Mango", "tree", 1], ["🌹", "Rose", "shrub"], ["🌿", "Grass", "herb"])],
+  ["hard", "A plant with a weak stem that climbs up with support is a ___.", ["Climber", "Tree", "Shrub", "Cactus"], "Climbers like the money plant and grapevine have weak stems, so they climb on walls or sticks.", C(["🌿", "Climber", "needs support", 1], ["🌳", "Tree", "strong trunk"])],
+  ["hard", "Which plant can grow in a hot desert with very little water?", ["Cactus", "Lotus", "Rose", "Rice"], "A cactus stores water in its thick stem and has spines instead of leaves, so it loses very little water.", C(["🌵", "Cactus", "desert", 1], ["🪷", "Lotus", "pond"])],
+  ["medium", "Which plant grows in water?", ["Lotus", "Cactus", "Mango tree", "Neem tree"], "The lotus grows in ponds. Its leaves float on the water.", C(["🪷", "Lotus", "water", 1], ["🌵", "Cactus", "desert"])],
+  ["hard", "Which part of the potato plant do we eat?", ["Stem", "Root", "Leaf", "Flower"], "A potato grows under the soil, but it is actually a swollen stem. Look for the 'eyes' that sprout.", C(["🥔", "Potato", "stem", 1], ["🥕", "Carrot", "root"], ["🥬", "Spinach", "leaf"])],
+  ["medium", "Which part of the carrot plant do we eat?", ["Root", "Stem", "Leaf", "Flower"], "The orange carrot grows under the soil. It is the root of the plant.", C(["🥕", "Carrot", "root", 1], ["🥬", "Spinach", "leaf"])],
+  ["medium", "Which part of the spinach plant do we eat?", ["Leaves", "Roots", "Flowers", "Seeds"], "We cook and eat the green leaves of spinach.", C(["🥬", "Spinach", "leaves", 1], ["🥕", "Carrot", "root"])],
+  ["hard", "Which part of the cauliflower plant do we eat?", ["Flower", "Root", "Stem", "Seed"], "The white head of the cauliflower is a bunch of flowers.", C(["🥦", "Cauliflower", "flower", 1], ["🥕", "Carrot", "root"])],
+  ["medium", "Peas are which part of the plant?", ["Seeds", "Roots", "Leaves", "Flowers"], "The green peas inside the pod are seeds.", C(["🫛", "Peas", "seeds", 1], ["🥬", "Spinach", "leaves"])],
+  ["medium", "Which organ helps us think?", ["Brain", "Stomach", "Lungs", "Teeth"], "The brain is inside the head. It helps us think, learn and remember.", C(["🧠", "Brain", "think", 1], ["❤️", "Heart", "pumps blood"], ["🫁", "Lungs", "breathe"])],
+  ["hard", "Which organ helps us breathe?", ["Lungs", "Heart", "Brain", "Stomach"], "Our lungs fill with air when we breathe in.", C(["🫁", "Lungs", "breathe", 1], ["❤️", "Heart", "pumps blood"])],
+  ["medium", "Which body part helps us chew food?", ["Teeth", "Ears", "Eyes", "Hair"], "Our teeth bite and chew food into small pieces.", C(["🦷", "Teeth", "chew", 1], ["👂", "Ears", "hear"])],
+  ["easy", "Which body part do we use to hold a pencil?", ["Hand", "Foot", "Nose", "Ear"], "We hold things and write with our hands and fingers.", C(["✋", "Hand", "hold", 1], ["🦶", "Foot", "walk"])],
+  ["hard", "What gives our body its shape?", ["Bones", "Hair", "Nails", "Blood"], "Bones join together to make the skeleton, which gives our body its shape and keeps it upright.", C(["🦴", "Bones", "shape", 1], ["💅", "Nails", ""])],
+];
+
+G[1].nso = Q => {
+  S1.forEach(([d, q, o, e, v]) => Q(d, q, o, e, v));
+  const babies = ANIMALS.filter(a => a.baby).map(a => a.baby);
+  ANIMALS.filter(a => a.baby).forEach(a => {
+    const common = ["puppy", "kitten", "calf", "cub", "chick", "duckling", "piglet"].includes(a.baby);
+    Q(common ? "easy" : "medium", `A baby ${a.n} is called ${an("___")}.`.replace("an ___", "a ___"), words(a.baby, babies), `Baby animals have special names. A baby ${a.n} is called ${an(a.baby)}.`, C(card(a, a.baby, 1), ...pickN(ANIMALS.filter(b => b.baby && b.baby !== a.baby), 2).map(b => card(b, b.baby))));
+  });
+  const homes = ANIMALS.filter(a => a.home).map(a => a.home);
+  ANIMALS.filter(a => a.home).forEach(a => {
+    Q(["nest", "kennel", "hive", "web"].includes(a.home) ? "easy" : "medium", `What is the home of ${an(a.n)} called?`, words(a.home, homes), `${cap1(an(a.n))} lives in ${an(a.home)}.`, C(card(a, a.home, 1), ...pickN(ANIMALS.filter(b => b.home && b.home !== a.home), 2).map(b => card(b, b.home))));
+  });
+  const sounds = ANIMALS.filter(a => a.sound).map(a => a.sound);
+  ANIMALS.filter(a => a.sound).forEach(a => {
+    const easy = ["bark", "mew", "moo", "roar", "quack", "buzz", "hiss"].includes(a.sound);
+    Q(easy ? "easy" : "medium", `What sound does ${an(a.n)} make?`, words(a.sound, sounds), `${cap1(an(a.n))} makes a "${a.sound}" sound.`, C(card(a, a.sound, 1), ...pickN(ANIMALS.filter(b => b.sound && b.sound !== a.sound), 2).map(b => card(b, b.sound))));
+    if (!easy) Q("hard", `Which animal ${a.sound === "baa" ? "says baa" : a.sound + "s"}?`, words(cap1(a.n), ANIMALS.filter(b => b.sound && b.sound !== a.sound).map(b => cap1(b.n))), `${cap1(an(a.n))} makes a "${a.sound}" sound.`, C(card(a, a.sound, 1)));
+  });
+  const MOVE = { fly: "fly", swim: "swim", hop: "hop", crawl: "crawl" };
+  for (const m in MOVE) {
+    const yes = ANIMALS.filter(a => a.move === m), no = ANIMALS.filter(a => a.move && a.move !== m && !(m === "swim" && a.n === "duck"));
+    yes.forEach(a => {
+      Q(m === "fly" || m === "swim" ? "easy" : "medium", `Which animal can ${m}?`, [cap1(a.n), ...pickN(no, 3).map(b => cap1(b.n))], `${cap1(an(a.n))} can ${m}.${m === "fly" ? " It has wings." : m === "swim" ? " It lives in water and has fins or flippers." : ""}`, C(card(a, m + "s", 1)));
+      Q("medium", `How does ${an(a.n)} move?`, [`It ${m}s`, ...["walks", "flies", "swims", "hops", "crawls"].filter(x => !x.startsWith(m.slice(0, 3))).slice(0, 3).map(x => "It " + x)], `${cap1(an(a.n))} ${m === "fly" ? "flies" : m + "s"} from place to place.`, C(card(a, m === "fly" ? "flies" : m + "s", 1)));
+    });
+  }
+  ANIMALS.filter(a => a.legs !== undefined).forEach(a => Q("medium", `How many legs does ${an(a.n)} have?`, nums(a.legs, [2, 4, 6, 8, 0].filter(x => x !== a.legs)), `${cap1(an(a.n))} has ${a.legs === 0 ? "no" : a.legs} legs.${a.legs === 6 ? " All insects have 6 legs." : a.legs === 8 ? " Spiders have 8 legs, so they are not insects." : ""}`, C(card(a, `${a.legs} legs`, 1))));
+  for (const [legs, txt] of [[8, "8 legs"], [6, "6 legs"], [0, "no legs"]]) ANIMALS.filter(a => a.legs === legs).forEach(a =>
+    Q("hard", `Which animal has ${txt}?`, [cap1(a.n), ...pickN(ANIMALS.filter(b => b.legs !== undefined && b.legs !== legs), 3).map(b => cap1(b.n))], `${cap1(an(a.n))} has ${txt}.`, C(card(a, txt, 1))));
+  ANIMALS.filter(a => a.gives).forEach(a => Q("easy", `Which animal gives us ${a.gives}?`, [cap1(a.n), ...pickN(ANIMALS.filter(b => !b.gives && b.legs !== undefined), 3).map(b => cap1(b.n))], `We get ${a.gives} from ${an(a.n)}.`, F(card(a, ""), ["", a.gives, "", 1])));
+  // Fruits and vegetables.
+  FRUITS.forEach(f => Q("easy", "Which of these is a fruit?", [cap1(f[1]), ...pickN(VEGS, 3).map(v => cap1(v[1]))], `${cap1(an(f[1]))} is a fruit. It is sweet and grows from a flower.`, C([...f, "fruit", 1])));
+  VEGS.forEach(v => Q("easy", "Which of these is a vegetable?", [cap1(v[1]), ...pickN(FRUITS, 3).map(f => cap1(f[1]))], `${cap1(v[1])} is a vegetable.`, C([...v, "vegetable", 1])));
+  VEGS.forEach(v => Q("medium", "Which of these is NOT a fruit?", [cap1(v[1]), ...pickN(FRUITS, 3).map(f => cap1(f[1]))], `${cap1(v[1])} is a vegetable. The others are fruits.`, C([...v, "vegetable", 1])));
+  HEALTHY.forEach(h => Q("easy", "Which food is good for our health?", [cap1(h[1]), ...pickN(JUNK, 3).map(j => cap1(j[1]))], `${cap1(h[1])} gives our body what it needs to grow. Chips, candy and cola are junk food.`, C([...h, "healthy", 1], ...pickN(JUNK, 2).map(j => [...j, "junk"]))));
+  JUNK.forEach(j => Q("medium", "Which food should we eat only a little of?", [cap1(j[1]), ...pickN(HEALTHY, 3).map(h => cap1(h[1]))], `${cap1(j[1])} has lots of sugar, salt or oil and very little goodness. Eat it only once in a while.`, C([...j, "junk", 1], ...pickN(HEALTHY, 2).map(h => [...h, "healthy"]))));
+  // Living and non-living.
+  LIVING.forEach(l => Q("easy", "Which of these is a living thing?", [cap1(l[1]), ...pickN(NONLIVING, 3).map(n => cap1(n[1]))], `Living things grow, breathe and need food and water. ${cap1(an(l[1]))} does all of these.`, C([...l, "living", 1], ...pickN(NONLIVING, 2).map(n => [...n, "non-living"]))));
+  NONLIVING.forEach(n => Q("medium", "Which of these is NOT a living thing?", [cap1(n[1]), ...pickN(LIVING, 3).map(l => cap1(l[1]))], `${cap1(an(n[1]))} does not grow, eat or breathe, so it is non-living.`, C([...n, "non-living", 1], ...pickN(LIVING, 2).map(l => [...l, "living"]))));
+  // Senses.
+  SENSES.forEach(([e, part, act]) => {
+    Q(part === "skin" ? "medium" : "easy", `Which body part do we use to ${act === "feel touch" ? "feel touch" : act}?`, words(cap1(part), SENSES.map(s => cap1(s[1]))), `We ${act === "feel touch" ? "feel touch, heat and cold" : act} with our ${part}.`, C(...SENSES.map(s => [s[0], cap1(s[1]), s[2], s[1] === part])));
+    if (part !== "skin") Q("easy", `What do we do with our ${part}?`, [cap1(act), ...SENSES.filter(s => s[1] !== part && s[1] !== "skin").map(s => cap1(s[2]))], `Our ${part} help${part === "nose" || part === "tongue" ? "s" : ""} us ${act}.`, C([e, cap1(part), act, 1]));
+  });
+  // Transport.
+  for (const [where, list] of Object.entries(TRANSPORT)) list.forEach(t => {
+    const others = Object.entries(TRANSPORT).filter(([w]) => w !== where).flatMap(([, l]) => l);
+    Q(where === "land" ? "medium" : "easy", where === "land" ? "Which of these moves on roads or land?" : where === "water" ? "Which of these moves on water?" : "Which of these flies in the air?", [cap1(t[1]), ...pickN(others, 3).map(o => cap1(o[1]))], `${cap1(an(t[1]))} is ${where} transport.`, C([...t, where, 1], ...pickN(others, 2).map(o => [...o, Object.entries(TRANSPORT).find(([, l]) => l.includes(o))[0]])));
+  });
+  // Materials, floating and sinking, kinds of animals.
+  const mats = [...new Set(MATERIAL.map(m => m[2]))];
+  MATERIAL.forEach(([e, o, m]) => Q("medium", `${cap1(an(o))} is usually made of ___.`, words(cap1(m), mats.map(cap1)), `${cap1(an(o))} is usually made of ${m}.`, C([e, cap1(o), m, 1])));
+  FLOATS.forEach(f => Q("medium", "Which of these will float on water?", [cap1(f[1]), ...pickN(SINKS, 3).map(s => cap1(s[1]))], `Light things like ${an(f[1])} float. Heavy things like stones, coins and iron sink.`, C([...f, "floats", 1], ...pickN(SINKS, 2).map(s => [...s, "sinks"]))));
+  SINKS.forEach(s => Q("hard", "Which of these will sink in water?", [cap1(s[1]), ...pickN(FLOATS, 3).map(f => cap1(f[1]))], `${cap1(an(s[1]))} is heavy for its size, so it sinks.`, C([...s, "sinks", 1], ...pickN(FLOATS, 2).map(f => [...f, "floats"]))));
+  WILD.forEach(w => Q("easy", "Which of these is a wild animal?", [cap1(w[1]), ...pickN([...PETS, ...FARM], 3).map(p => cap1(p[1]))], `${cap1(an(w[1]))} lives in the forest or grassland, not with people. It is a wild animal.`, C([...w, "wild", 1])));
+  PETS.forEach(p => Q("easy", "Which of these can be kept as a pet at home?", [cap1(p[1]), ...pickN(WILD, 3).map(w => cap1(w[1]))], `${cap1(an(p[1]))} is a pet. Lions, tigers and bears are wild animals.`, C([...p, "pet", 1])));
+  FARM.forEach(f => Q("medium", "Which of these is a farm animal?", [cap1(f[1]), ...pickN(WILD, 3).map(w => cap1(w[1]))], `Farmers keep ${f[1] === "sheep" ? "sheep" : f[1] + "s"} on farms for milk, eggs, wool or meat.`, C([...f, "farm", 1])));
+  const INSECTS = ["ant", "bee", "butterfly"], NOT_INS = ["spider", "earthworm", "snail"];
+  INSECTS.forEach(i => Q("hard", "Which of these is an insect?", [cap1(i), ...NOT_INS.map(cap1)], `Insects have 6 legs. ${cap1(an(i))} has 6 legs. A spider has 8, and earthworms and snails have none.`, C(card(A(i), "6 legs", 1), card(A("spider"), "8 legs"), card(A("snail"), "no legs"))));
+  ["hen", "sparrow", "owl", "eagle", "duck"].forEach(b => Q("hard", "Which of these is a bird?", [cap1(b), "Bat", "Butterfly", "Bee"], `Birds have feathers, wings and a beak, and they lay eggs. ${cap1(an(b))} is a bird. A bat can fly but has fur, not feathers.`, C(card(A(b), "feathers", 1), ["🦇", "Bat", "fur, not a bird"])));
+};
+
+// ---------- Grade 4 ----------
+const DIET = { herbivore: ["cow", "deer", "goat", "rabbit", "elephant", "giraffe", "horse", "zebra", "camel", "sheep"], carnivore: ["lion", "tiger", "wolf", "leopard", "eagle", "shark", "crocodile", "cheetah"], omnivore: ["bear", "crow", "human", "pig", "monkey", "hen"] };
+const BIRTH = { eggs: ["hen", "duck", "snake", "crocodile", "frog", "fish", "turtle", "sparrow", "lizard", "butterfly"], babies: ["cow", "dog", "cat", "human", "elephant", "whale", "bat", "monkey", "rabbit", "dolphin"] };
+const BREATHE = [["fish", "gills"], ["tadpole", "gills"], ["earthworm", "moist skin"], ["cockroach", "air holes (spiracles)"], ["grasshopper", "air holes (spiracles)"], ["whale", "lungs"], ["dolphin", "lungs"], ["dog", "lungs"], ["human", "lungs"], ["sparrow", "lungs"]];
+const EATEN = { root: ["carrot", "radish", "beetroot", "turnip", "sweet potato"], stem: ["potato", "ginger", "sugarcane"], leaf: ["spinach", "cabbage", "lettuce", "mint", "coriander"], flower: ["cauliflower", "broccoli"], seed: ["peas", "wheat", "rice", "mustard", "beans"], fruit: ["mango", "apple", "tomato", "brinjal", "cucumber"] };
+const DISPERSE = { wind: ["dandelion", "cotton", "maple"], water: ["coconut", "lotus"], animals: ["xanthium (burr)", "burdock"], bursting: ["balsam", "castor"] };
+const NUTRI = { carbohydrates: ["rice", "bread", "potato", "chapati", "sugar"], proteins: ["dal (pulses)", "eggs", "paneer", "soybean", "fish"], fats: ["butter", "ghee", "cooking oil", "cream"] };
+const VITAMINS = [["Vitamin C", "scurvy (bleeding gums)", "oranges and lemons"], ["Vitamin D", "rickets (soft bones)", "sunlight and milk"], ["Vitamin A", "night blindness", "carrots and papaya"], ["Vitamin B1", "beriberi", "whole grains"], ["Iodine", "goitre", "iodised salt"], ["Iron", "anaemia", "spinach and jaggery"], ["Calcium", "weak bones and teeth", "milk and curd"]];
+const ORGANS = [["❤️", "heart", "pumping blood around the body"], ["🫁", "lungs", "breathing"], ["🧠", "brain", "controlling the body and thinking"], ["🫃", "stomach", "digesting food"], ["🫘", "kidneys", "cleaning the blood and making urine"], ["✋", "skin", "protecting the body and sensing touch"], ["🦴", "skeleton", "giving the body its shape and support"]];
+const TEETH = [["incisors", "cut and bite food", "front, flat and sharp"], ["canines", "tear food", "pointed, next to incisors"], ["premolars", "crush food", "behind canines"], ["molars", "grind and chew food", "broad, at the back"]];
+const STATES = { solid: ["stone", "ice", "wood", "coin", "book"], liquid: ["water", "milk", "oil", "juice", "honey"], gas: ["air", "steam", "oxygen", "carbon dioxide"] };
+const CHANGES = [["melting", "solid to liquid", "ice cream turning runny on a hot day"], ["freezing", "liquid to solid", "water becoming ice in the freezer"], ["evaporation", "liquid to gas", "wet clothes drying in the sun"], ["condensation", "gas to liquid", "water drops on the outside of a cold glass"]];
+const PLANETS = ["Mercury", "Venus", "Earth", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune"];
+const PFACTS = [["the largest planet", 4], ["the smallest planet", 0], ["called the Red Planet", 3], ["famous for its bright rings", 5], ["the hottest planet", 1], ["the planet we live on", 2], ["the farthest planet from the Sun", 7], ["the closest planet to the Sun", 0], ["called the Blue Planet", 2]];
+const COND = { conductors: ["copper", "iron", "aluminium", "silver", "a steel spoon"], insulators: ["rubber", "plastic", "wood", "glass", "paper"] };
+const MAGNET = { yes: ["an iron nail", "a steel pin", "iron filings", "a steel paper clip"], no: ["a wooden stick", "a plastic ruler", "paper", "a rubber band", "a copper wire", "aluminium foil", "glass"] };
+const MACHINES = [["lever", ["seesaw", "bottle opener", "crowbar"]], ["pulley", ["flagpole rope", "well for drawing water", "crane"]], ["wheel and axle", ["doorknob", "steering wheel", "screwdriver handle"]], ["inclined plane", ["ramp", "slide", "sloping road"]], ["wedge", ["knife", "axe", "nail tip"]], ["screw", ["jar lid", "bolt", "spiral staircase"]]];
+const INSTR = [["thermometer", "to measure temperature", "🌡️"], ["weighing balance", "to measure mass (weight)", "⚖️"], ["measuring tape", "to measure length", "📏"], ["stethoscope", "to listen to the heartbeat", "🩺"], ["rain gauge", "to measure rainfall", "🌧️"], ["compass", "to find direction", "🧭"], ["clock", "to tell the time", "⏰"]];
+const ENERGY = { renewable: ["sunlight", "wind", "flowing water"], "non-renewable": ["coal", "petrol", "natural gas"] };
+
+const S4 = [
+  ["medium", "How many teeth does an adult have?", ["32", "20", "28", "36"], "Children have 20 milk teeth. Adults have 32 permanent teeth.", C(["🧒", "Milk teeth", "20"], ["🧑", "Permanent teeth", "32", 1])],
+  ["hard", "How many milk teeth does a child have?", ["20", "32", "24", "16"], "Children have 20 milk teeth. They fall out and are replaced by 32 permanent teeth.", C(["🧒", "Milk teeth", "20", 1], ["🧑", "Permanent", "32"])],
+  ["hard", "How many bones are there in an adult human body?", ["206", "300", "106", "26"], "A baby is born with about 300 bones. Some join together as we grow, leaving 206 in an adult.", C(["👶", "Baby", "about 300"], ["🧑", "Adult", "206", 1])],
+  ["hard", "Which bones protect the heart and lungs?", ["Ribs", "Skull", "Backbone", "Thigh bone"], "The ribs form a cage around the chest that protects the heart and lungs.", C(["🦴", "Ribs", "heart and lungs", 1], ["💀", "Skull", "brain"])],
+  ["medium", "Which bone protects the brain?", ["Skull", "Ribs", "Backbone", "Hip bone"], "The skull is a hard bony box that protects the brain.", C(["💀", "Skull", "brain", 1], ["🦴", "Ribs", "heart and lungs"])],
+  ["medium", "Day and night happen because the Earth ___.", ["spins on its axis", "goes around the Moon", "stops moving at night", "moves closer to the Sun"], "The Earth spins once every 24 hours. The side facing the Sun has day, and the other side has night.", F(["🌍", "Earth spins", "rotation"], ["🌗", "Day and night", "every 24 h", 1])],
+  ["hard", "How long does the Earth take to go around the Sun once?", ["About 365 days", "24 hours", "30 days", "7 days"], "One trip around the Sun is called a revolution. It takes about 365 days, which is one year.", F(["🌍", "Earth", ""], ["☀️", "around Sun", ""], ["📅", "365 days", "1 year", 1])],
+  ["medium", "What is the Moon?", ["Earth's natural satellite", "A star", "A planet", "A comet"], "The Moon goes around the Earth, so it is Earth's natural satellite. It has no light of its own.", F(["🌍", "Earth", ""], ["🌕", "Moon", "satellite", 1])],
+  ["hard", "Why do we see different shapes (phases) of the Moon?", ["We see different amounts of its sunlit half", "The Moon changes size", "Clouds cover parts of it", "The Moon makes its own light"], "Half the Moon is always lit by the Sun. As it moves around the Earth, we see more or less of that lit half.", F(["🌑", "New", ""], ["🌓", "Half", ""], ["🌕", "Full", "", 1])],
+  ["medium", "At what temperature does pure water boil?", ["100 °C", "0 °C", "50 °C", "212 °C"], "Pure water boils at 100 °C and freezes at 0 °C.", F(["🧊", "0 °C", "freezes"], ["💧", "Water", ""], ["♨️", "100 °C", "boils", 1])],
+  ["hard", "Put the water cycle in order: clouds form, rain falls, water evaporates.", ["Evaporates → clouds form → rain falls", "Rain falls → evaporates → clouds form", "Clouds form → evaporates → rain falls", "Rain falls → clouds form → evaporates"], "The Sun heats water so it evaporates. The vapour cools and forms clouds (condensation). Then rain falls back down.", F(["☀️", "Evaporation", ""], ["☁️", "Condensation", ""], ["🌧️", "Rain", "", 1])],
+  ["medium", "Which gas do plants take in to make food?", ["Carbon dioxide", "Oxygen", "Nitrogen", "Helium"], "In photosynthesis, leaves take in carbon dioxide and give out oxygen.", F(["💨", "CO₂ in", "", 1], ["🍃", "Leaf", ""], ["🫧", "O₂ out", ""])],
+  ["medium", "Which gas do we need to breathe in to stay alive?", ["Oxygen", "Carbon dioxide", "Smoke", "Helium"], "We breathe in oxygen and breathe out carbon dioxide.", F(["🫧", "Oxygen in", "", 1], ["🫁", "Lungs", ""], ["💨", "CO₂ out", ""])],
+  ["hard", "Why do leaves look green?", ["They contain chlorophyll", "They are painted by rain", "They contain sugar", "They reflect blue light"], "Leaves have a green pigment called chlorophyll. It traps sunlight to make food.", C(["🍃", "Chlorophyll", "green pigment", 1])],
+  ["medium", "Which animal is adapted to live in very cold polar regions?", ["Polar bear", "Camel", "Lizard", "Peacock"], "A polar bear has thick white fur and a layer of fat that keep it warm in the snow.", C(["🐻‍❄️", "Polar bear", "thick fur, fat", 1], ["🐫", "Camel", "desert"])],
+  ["medium", "What helps a duck swim easily?", ["Webbed feet", "Sharp claws", "Long tail", "A hump"], "A duck's toes are joined by skin (webbed). They push water like paddles.", C(["🦆", "Duck", "webbed feet", 1])],
+  ["hard", "Which animal can live both on land and in water?", ["Frog", "Fish", "Cow", "Eagle"], "Frogs are amphibians. They breathe with lungs on land and through their moist skin in water.", C(["🐸", "Frog", "amphibian", 1], ["🐟", "Fish", "water only"])],
+  ["medium", "A thermometer is used to measure ___.", ["Temperature", "Length", "Weight", "Time"], "A thermometer tells how hot or cold something is.", C(["🌡️", "Thermometer", "temperature", 1])],
+  ["hard", "Which of these causes air pollution?", ["Smoke from vehicles", "Planting trees", "Riding a bicycle", "Solar panels"], "Smoke from vehicles and factories adds harmful gases to the air.", C(["🚗", "Vehicle smoke", "pollutes", 1], ["🌳", "Trees", "clean air"])],
+  ["medium", "Which of these helps reduce pollution?", ["Using public transport", "Burning garbage", "Cutting trees", "Throwing plastic in rivers"], "Buses and trains carry many people at once, so fewer cars are on the road and less smoke is made.", C(["🚌", "Public transport", "less smoke", 1], ["🔥", "Burning garbage", "more smoke"])],
+  ["hard", "What should you do first if someone gets a small burn?", ["Hold it under cool running water", "Put ice cream on it", "Rub it hard", "Cover it with butter"], "Cool running water for a few minutes stops the burn getting worse. Then tell an adult.", F(["🔥", "Small burn", ""], ["🚰", "Cool water", "", 1], ["🧑‍⚕️", "Tell an adult", ""])],
+  ["medium", "Friction is a force that ___.", ["slows down moving things", "makes things float", "pulls things to the Earth", "attracts iron"], "Friction acts between two surfaces rubbing together and slows motion. Rough surfaces have more friction.", F(["⚽", "Rolling ball", ""], ["🟫", "Rough ground", ""], ["🛑", "Slows down", "", 1])],
+  ["hard", "Why are tyres made with grooves?", ["To increase friction and grip the road", "To make them lighter", "To make them look nice", "To hold air"], "Grooves increase friction with the road, so the tyres grip better and don't slip.", C(["🛞", "Grooved tyre", "more grip", 1])],
+  ["medium", "Opening a drawer is an example of a ___.", ["Pull", "Push", "Neither", "Magnetic force"], "We pull the handle towards us to open a drawer.", C(["🗄️", "Drawer", "pull", 1])],
+  ["medium", "Kicking a football is an example of a ___.", ["Push", "Pull", "Friction", "Neither"], "Kicking moves the ball away from us, which is a push.", C(["⚽", "Kick", "push", 1])],
+  ["hard", "Which of these is a luminous object (makes its own light)?", ["A burning candle", "The Moon", "A mirror", "A book"], "Luminous objects make their own light. The Moon and mirrors only reflect light.", C(["🕯️", "Candle", "luminous", 1], ["🌕", "Moon", "reflects"])],
+  ["medium", "What do we call animals that are active at night?", ["Nocturnal", "Herbivores", "Aquatic", "Amphibians"], "Animals like owls and bats sleep in the day and are active at night. They are nocturnal.", C(["🦉", "Owl", "nocturnal", 1], ["🦇", "Bat", "nocturnal", 1])],
+  ["hard", "Which part of the plant takes in water and minerals from the soil?", ["Roots", "Leaves", "Flowers", "Fruits"], "Tiny root hairs soak up water and minerals from the soil.", { t: "plant", hl: "root" }],
+  ["medium", "Which part of a flower becomes the fruit?", ["Ovary", "Petal", "Sepal", "Stem"], "After pollination, the ovary of the flower grows into a fruit, and the ovules become seeds.", F(["🌸", "Flower", ""], ["🫛", "Ovary grows", ""], ["🍎", "Fruit", "", 1])],
+  ["hard", "Bees help flowers by carrying ___ from one flower to another.", ["Pollen", "Water", "Soil", "Leaves"], "Bees carry pollen between flowers. This pollination helps flowers make seeds and fruits.", F(["🌼", "Flower", ""], ["🐝", "Bee carries pollen", "", 1], ["🌸", "Flower", ""])],
+];
+
+G[4].nso = Q => {
+  S4.forEach(([d, q, o, e, v]) => Q(d, q, o, e, v));
+  const em = n => (A(n) || {}).e || "🐾";
+  for (const [kind, list] of Object.entries(DIET)) list.forEach(a => {
+    const others = Object.entries(DIET).filter(([k]) => k !== kind).flatMap(([, l]) => l);
+    Q(kind === "herbivore" ? "easy" : kind === "carnivore" ? "medium" : "hard", `Which of these is ${an(kind)}?`, [cap1(a), ...pickN(others, 3).map(cap1)], `${cap1(kind)}s eat ${kind === "herbivore" ? "only plants" : kind === "carnivore" ? "only other animals" : "both plants and animals"}. ${cap1(an(a))} is ${an(kind)}.`, C([em(a), cap1(a), kind, 1], ["🌿", "Herbivore", "plants"], ["🥩", "Carnivore", "meat"], ["🍽️", "Omnivore", "both"]));
+    Q(kind === "omnivore" ? "medium" : "easy", `${cap1(an(a))} is a/an ___.`, ["herbivore", "carnivore", "omnivore", "insectivore"].sort((x, y) => (y === kind) - (x === kind)), `${cap1(an(a))} eats ${kind === "herbivore" ? "plants" : kind === "carnivore" ? "other animals" : "both plants and animals"}, so it is ${an(kind)}.`, C([em(a), cap1(a), kind, 1]));
+  });
+  for (const [kind, list] of Object.entries(BIRTH)) list.forEach(a => {
+    const tricky = ["whale", "bat", "dolphin"].includes(a);
+    Q(tricky ? "hard" : "medium", kind === "eggs" ? "Which of these animals lays eggs?" : "Which of these animals gives birth to babies?", [cap1(a), ...pickN(BIRTH[kind === "eggs" ? "babies" : "eggs"], 3).map(cap1)], kind === "eggs" ? `${cap1(an(a))} lays eggs, and its young hatch from them.` : `${cap1(an(a))} gives birth to babies and feeds them milk.${tricky ? ` Even though it ${a === "bat" ? "flies" : "lives in water"}, it is a mammal.` : ""}`, C([em(a), cap1(a), kind === "eggs" ? "lays eggs" : "gives birth", 1]));
+  });
+  const organs = [...new Set(BREATHE.map(b => b[1]))];
+  BREATHE.forEach(([a, o]) => Q(["whale", "dolphin", "earthworm", "tadpole"].includes(a) ? "hard" : "medium", `How does ${an(a)} breathe?`, words(`Through ${o}`, organs.map(x => "Through " + x)), `${cap1(an(a))} breathes through ${o}.${a === "whale" || a === "dolphin" ? " It lives in water but comes up to the surface to breathe air." : ""}`, C([em(a), cap1(a), o, 1])));
+  const parts = Object.keys(EATEN);
+  for (const [part, list] of Object.entries(EATEN)) list.forEach(p => Q(part === "stem" || p === "tomato" || p === "cucumber" || p === "brinjal" ? "hard" : "medium", `When we eat ${p}, which part of the plant are we eating?`, words(cap1(part), parts.map(cap1)), `In ${p} we eat the ${part}.${part === "stem" ? " It grows underground or tall, but it has buds (eyes) or nodes, which roots don't." : ""}`, C(["🌱", cap1(p), part, 1], ...pickN(Object.entries(EATEN).filter(([k]) => k !== part), 2).map(([k, l]) => ["", cap1(l[0]), k]))));
+  const ways = Object.keys(DISPERSE);
+  for (const [w, list] of Object.entries(DISPERSE)) list.forEach(p => Q("hard", `How are the seeds of ${p} spread?`, words(`By ${w}`, ways.map(x => "By " + x)), `${cap1(p)} seeds are spread by ${w}.${w === "wind" ? " They are light or have hairs or wings." : w === "water" ? " They float." : w === "animals" ? " They have hooks that stick to fur." : " The pods burst open and throw them out."}`, C(["🌱", cap1(p), w, 1])));
+  for (const [n, list] of Object.entries(NUTRI)) list.forEach(f => {
+    const others = Object.entries(NUTRI).filter(([k]) => k !== n).flatMap(([, l]) => l);
+    Q("medium", `Which food is rich in ${n}?`, [cap1(f), ...pickN(others, 3).map(cap1)], `${cap1(f)} is rich in ${n}, which ${n === "carbohydrates" ? "give us energy" : n === "proteins" ? "help us grow and repair the body" : "give us lots of energy and keep us warm"}.`, C(["🍽️", cap1(f), n, 1], ...pickN(Object.entries(NUTRI).filter(([k]) => k !== n), 2).map(([k, l]) => ["", cap1(l[0]), k])));
+  });
+  VITAMINS.forEach(([v, dis, src]) => {
+    Q("hard", `Lack of which nutrient causes ${dis}?`, words(v, VITAMINS.map(x => x[0])), `${v} deficiency causes ${dis}. We get ${v} from ${src}.`, F(["❌", `No ${v}`, ""], ["🤒", dis, "", 1], ["✅", "Fix", src]));
+    Q("medium", `Which of these is a good source of ${v}?`, [cap1(src), ...pickN(VITAMINS.filter(x => x[0] !== v).map(x => cap1(x[2])), 3)], `${cap1(src)} give${src.endsWith("s") || src.includes(" and ") ? "" : "s"} us ${v}.`, C(["🥗", cap1(src), v, 1]));
+  });
+  ORGANS.forEach(([e, o, job]) => {
+    Q("easy", `Which part of the body is used for ${job}?`, words(cap1(o), ORGANS.map(x => cap1(x[1]))), `The ${o} ${o === "lungs" || o === "kidneys" ? "are" : "is"} used for ${job}.`, C([e, cap1(o), job, 1]));
+    Q("medium", `What is the main job of the ${o}?`, words(cap1(job), ORGANS.map(x => cap1(x[2]))), `The main job of the ${o} is ${job}.`, C([e, cap1(o), job, 1]));
+  });
+  TEETH.forEach(([t, job, where]) => {
+    Q("medium", `Which teeth ${job}?`, words(cap1(t), TEETH.map(x => cap1(x[0]))), `${cap1(t)} (${where}) ${job}.`, C(...TEETH.map(x => ["🦷", cap1(x[0]), x[1], x[0] === t])));
+    Q("hard", `What is the main job of the ${t}?`, words(cap1(job), TEETH.map(x => cap1(x[1]))), `${cap1(t)} are ${where}. They ${job}.`, C(...TEETH.map(x => ["🦷", cap1(x[0]), x[1], x[0] === t])));
+  });
+  for (const [st, list] of Object.entries(STATES)) list.forEach(x => {
+    const others = Object.entries(STATES).filter(([k]) => k !== st).flatMap(([, l]) => l);
+    Q("easy", `Which of these is a ${st}?`, [cap1(x), ...pickN(others, 3).map(cap1)], `${cap1(x)} is a ${st}. ${st === "solid" ? "Solids keep their own shape." : st === "liquid" ? "Liquids flow and take the shape of their container." : "Gases spread out to fill all the space they get."}`, C(["🧊", "Solid", "fixed shape", st === "solid"], ["💧", "Liquid", "flows", st === "liquid"], ["💨", "Gas", "fills space", st === "gas"]));
+  });
+  CHANGES.forEach(([c, what, ex]) => {
+    Q("medium", `What is the change from ${what} called?`, words(cap1(c), CHANGES.map(x => cap1(x[0]))), `${cap1(c)} is the change from ${what}, like ${ex}.`, F(["", what.split(" to ")[0], ""], ["", cap1(c), "", 1], ["", what.split(" to ")[1], ""]));
+    Q("hard", `${cap1(ex)} is an example of ___.`, words(cap1(c), CHANGES.map(x => cap1(x[0]))), `That is ${c}: a change from ${what}.`, F(["", what.split(" to ")[0], ""], ["", cap1(c), "", 1], ["", what.split(" to ")[1], ""]));
+  });
+  PFACTS.forEach(([f, i]) => Q("medium", `Which planet is ${f}?`, words(PLANETS[i], PLANETS), `${PLANETS[i]} is ${f}.`, { t: "planets", hl: i }));
+  PLANETS.forEach((p, i) => Q(i === 0 || i === 2 ? "easy" : "hard", `Counting from the Sun, which planet is number ${i + 1}?`, words(p, PLANETS), `In order from the Sun: ${PLANETS.slice(0, i + 1).join(", ")}. So planet ${i + 1} is ${p}.`, { t: "planets", hl: i }));
+  for (const [k, list] of Object.entries(COND)) list.forEach(x => Q("medium", `Which of these is a good ${k === "conductors" ? "conductor" : "insulator"} of electricity?`, [cap1(x), ...pickN(COND[k === "conductors" ? "insulators" : "conductors"], 3).map(cap1)], k === "conductors" ? `${cap1(x)} is a metal, so electricity flows through it easily.` : `${cap1(x)} does not let electricity pass, so it keeps us safe from shocks.`, C(["⚡", cap1(x), k.slice(0, -1), 1])));
+  MAGNET.yes.forEach(x => Q("medium", "Which of these will a magnet pull (attract)?", [cap1(x), ...pickN(MAGNET.no, 3).map(cap1)], `Magnets attract things made of iron or steel, like ${x}.`, C(["🧲", cap1(x), "attracted", 1])));
+  MAGNET.no.forEach(x => Q(x.includes("copper") || x.includes("aluminium") ? "hard" : "medium", "Which of these will a magnet NOT attract?", [cap1(x), ...pickN(MAGNET.yes, 3).map(cap1)], `Magnets attract only iron, steel, nickel and cobalt. ${cap1(x)} is not attracted${x.includes("copper") || x.includes("aluminium") ? ", even though it is a metal" : ""}.`, C(["🧲", cap1(x), "not attracted", 1])));
+  const mnames = MACHINES.map(m => m[0]);
+  MACHINES.forEach(([m, ex]) => ex.forEach(x => Q("hard", `${cap1(an(x))} is an example of which simple machine?`, words(cap1(m), mnames.map(cap1)), `${cap1(an(x))} works as ${an(m)}.`, m === "lever" ? { t: "lever" } : C(["⚙️", cap1(m), x, 1]))));
+  INSTR.forEach(([i, use, e]) => {
+    Q(i === "rain gauge" || i === "stethoscope" ? "hard" : "easy", `What is ${an(i)} used for?`, words(cap1(use), INSTR.map(x => cap1(x[1]))), `${cap1(an(i))} is used ${use}.`, C([e, cap1(i), use, 1]));
+    Q("medium", `Which instrument is used ${use}?`, words(cap1(i), INSTR.map(x => cap1(x[0]))), `We use ${an(i)} ${use}.`, C([e, cap1(i), use, 1]));
+  });
+  for (const [k, list] of Object.entries(ENERGY)) list.forEach(x => Q("hard", `Which of these is a ${k} source of energy?`, [cap1(x), ...ENERGY[k === "renewable" ? "non-renewable" : "renewable"].map(cap1)], k === "renewable" ? `${cap1(x)} will never run out, so it is renewable.` : `${cap1(x)} took millions of years to form and will run out, so it is non-renewable.`, C(["⚡", cap1(x), k, 1])));
+};
+
+// More NSO templates shared by both grades: animal sizes, coverings, habitats, plant types, light, food groups, habits.
+const SIZES = [["🐘", "elephant"], ["🐎", "horse"], ["🐕", "dog"], ["🐈", "cat"], ["🐇", "rabbit"], ["🐭", "mouse"], ["🐜", "ant"]];
+const COVER = [["🐦", "sparrow", "feathers"], ["🐔", "hen", "feathers"], ["🐟", "fish", "scales"], ["🐍", "snake", "scales"], ["🐕", "dog", "fur (hair)"], ["🐻", "bear", "fur (hair)"], ["🐢", "tortoise", "a hard shell"], ["🦔", "porcupine", "sharp spines"]];
+const HABITAT = { water: [["🐟", "fish"], ["🐋", "whale"], ["🐬", "dolphin"], ["🐙", "octopus"], ["🦀", "crab"], ["🪼", "jellyfish"]], trees: [["🐒", "monkey"], ["🐿️", "squirrel"], ["🐨", "koala"], ["🦥", "sloth"]], land: [["🦁", "lion"], ["🐄", "cow"], ["🐘", "elephant"], ["🐎", "horse"], ["🦓", "zebra"], ["🐫", "camel"]] };
+const LIGHT = { natural: [["☀️", "the Sun"], ["⭐", "stars"], ["🪲", "a firefly"], ["⚡", "lightning"]], "man-made": [["💡", "a bulb"], ["🔦", "a torch"], ["🕯️", "a candle"], ["🏮", "a lantern"]] };
+const DAIRY = [["🥛", "milk"], ["🧀", "cheese"], ["🧈", "butter"], ["🥣", "curd"], ["🍦", "ice cream"]], NOTDAIRY = [["🍎", "apple"], ["🍞", "bread"], ["🥕", "carrot"], ["🍚", "rice"], ["🥜", "peanuts"]];
+const WATERSRC = { natural: ["river", "lake", "rain", "sea", "spring"], "made by people": ["tap", "water tank", "bottle", "swimming pool"] };
+const PLANTTYPE = { tree: ["mango", "neem", "banyan", "coconut", "peepal"], shrub: ["rose", "hibiscus", "tulsi", "jasmine"], herb: ["mint", "coriander", "grass", "wheat"], climber: ["money plant", "grapevine", "pea plant"], creeper: ["pumpkin", "watermelon", "strawberry"] };
+const PT_DESC = { tree: "big and tall with a thick, woody trunk", shrub: "smaller than a tree, with many hard, woody stems", herb: "small and soft with a green, tender stem", climber: "weak-stemmed and climbs up a support", creeper: "weak-stemmed and spreads along the ground" };
+const HABITS = [
+  ["We should drink plenty of ___ every day.", ["Water", "Cola", "Coffee", "Juice with sugar"], "Our body needs lots of clean water to stay healthy.", "💧"],
+  ["When we sneeze, we should ___.", ["Cover our nose and mouth", "Sneeze on others", "Laugh loudly", "Close our eyes only"], "Covering our nose and mouth stops germs from spreading to others.", "🤧"],
+  ["Where should we throw rubbish?", ["In a dustbin", "On the road", "In the river", "Under the bed"], "Rubbish goes in the dustbin to keep our home and town clean.", "🗑️"],
+  ["Why should we cut our nails regularly?", ["So dirt and germs don't collect under them", "So they grow faster", "So we can't write", "To change their colour"], "Dirt and germs collect under long nails and can get into our food.", "💅"],
+  ["How many hours should a young child sleep at night?", ["About 10 hours", "About 2 hours", "About 20 hours", "No sleep is needed"], "Children need about 9 to 11 hours of sleep to grow and stay active.", "😴"],
+  ["Which of these keeps our body fit and strong?", ["Playing outdoors", "Watching TV all day", "Eating only sweets", "Sleeping all day"], "Running, jumping and playing make our muscles and heart strong.", "🏃"],
+  ["We should take a bath ___.", ["Every day", "Once a month", "Only on holidays", "Never"], "A daily bath keeps our skin clean and free of germs.", "🛁"],
+  ["Why do we wash fruits before eating them?", ["To remove dirt and germs", "To make them sweeter", "To change their colour", "To make them bigger"], "Fruits can carry dust and germs from the market. Washing removes them.", "🍎"],
+];
+
+const moreNSO = (Q, g) => {
+  const lo = g === 1;
+  // Sizes.
+  for (let k = 0; k < 40; k++) {
+    const set = pickN(SIZES, 4), order = set.map(s => SIZES.indexOf(s)), big = k % 2 === 0, idx = big ? order.indexOf(Math.min(...order)) : order.indexOf(Math.max(...order)), ans = set[idx];
+    Q(big ? "easy" : lo ? "medium" : "easy", `Which of these animals is the ${big ? "biggest" : "smallest"}?`, [cap1(ans[1]), ...set.filter(s => s !== ans).map(s => cap1(s[1]))], `From biggest to smallest: ${SIZES.filter(s => set.includes(s)).map(s => s[1]).join(", ")}. The ${big ? "biggest" : "smallest"} is the ${ans[1]}.`, C(...SIZES.filter(s => set.includes(s)).map(s => [...s, "", s === ans])));
+  }
+  const covers = [...new Set(COVER.map(c => c[2]))];
+  COVER.forEach(([e, a, c]) => Q(lo && (c === "a hard shell" || c === "sharp spines") ? "medium" : "easy", `What covers the body of ${an(a)}?`, words(cap1(c), covers.map(cap1)), `${cap1(an(a))} has ${c} on its body. Birds have feathers, fish and snakes have scales, and many animals have fur.`, C([e, cap1(a), c, 1])));
+  for (const [h, list] of Object.entries(HABITAT)) list.forEach(a => {
+    const others = Object.entries(HABITAT).filter(([k]) => k !== h).flatMap(([, l]) => l);
+    Q(h === "water" ? "easy" : "medium", h === "water" ? "Which animal lives in water?" : h === "trees" ? "Which animal spends most of its life in trees?" : "Which animal lives on land?", [cap1(a[1]), ...pickN(others, 3).map(o => cap1(o[1]))], `${cap1(an(a[1]))} lives ${h === "water" ? "in water" : h === "trees" ? "in trees, with strong arms or claws for climbing" : "on land"}.`, C([...a, h, 1]));
+  });
+  for (const [k, list] of Object.entries(LIGHT)) list.forEach(l => {
+    const other = LIGHT[k === "natural" ? "man-made" : "natural"];
+    Q(k === "natural" ? (lo ? "medium" : "easy") : (lo ? "hard" : "medium"), `Which of these is a ${k} source of light?`, [cap1(l[1]), ...pickN(other, 3).map(o => cap1(o[1]))], k === "natural" ? `${cap1(l[1])} gives light without anyone making it, so it is natural.` : `${cap1(l[1])} is made by people, so it is a man-made source of light.`, C([...l, k, 1]));
+  });
+  DAIRY.forEach(d => Q("easy", "Which of these do we get from milk?", [cap1(d[1]), ...pickN(NOTDAIRY, 3).map(n => cap1(n[1]))], `${cap1(d[1])} is made from milk. Foods made from milk are called dairy foods.`, F(["🥛", "Milk", ""], [...d, "", 1])));
+  for (const [k, list] of Object.entries(WATERSRC)) list.forEach(w => Q(k === "natural" ? "easy" : "medium", `Which of these is a ${k === "natural" ? "natural source of water" : "source of water made by people"}?`, [cap1(w), ...pickN(WATERSRC[k === "natural" ? "made by people" : "natural"], 3).map(cap1)], `${cap1(an(w))} ${k === "natural" ? "is made by nature" : "is made by people"}.`, C(["💧", cap1(w), k, 1])));
+  const types = Object.keys(PLANTTYPE);
+  for (const [t, list] of Object.entries(PLANTTYPE)) list.forEach(p => Q(lo ? "hard" : "medium", `${cap1(an(p))}${p.endsWith("plant") ? "" : " plant"} is a ___.`, words(t, types), `${cap1(an(p))}${p.endsWith("plant") ? "" : " plant"} is ${an(t)}: it is ${PT_DESC[t]}.`, C(["🌱", cap1(p), t, 1])));
+  HABITS.forEach(([q, o, e, em]) => Q(lo ? "easy" : "easy", q, o, e, C([em, o[0], "good habit", 1])));
+  ["cow", "goat", "rabbit", "deer", "elephant", "horse"].forEach(a => Q(lo ? "hard" : "easy", "Which of these animals eats only plants?", [cap1(a), "Lion", "Tiger", "Wolf"], `${cap1(an(a))} eats grass and leaves. Lions, tigers and wolves eat other animals.`, C([(A(a) || {}).e || "🦌", cap1(a), "plants", 1])));
+  ["lion", "tiger", "wolf"].forEach(a => Q(lo ? "hard" : "easy", "Which of these animals eats other animals?", [cap1(a), "Cow", "Goat", "Rabbit"], `${cap1(an(a))} hunts and eats other animals.`, C([(A(a) || {}).e || "🐺", cap1(a), "meat", 1])));
+  Q("hard", "Which bird cannot fly?", ["Ostrich", "Sparrow", "Eagle", "Parrot"], "The ostrich is too heavy to fly, but it can run very fast.", C(["🐦", "Ostrich", "runs fast", 1]));
+  Q("hard", "Which bird cannot fly but is an excellent swimmer?", ["Penguin", "Pigeon", "Crow", "Owl"], "Penguins use their wings like flippers to swim in cold seas.", C(["🐧", "Penguin", "swims", 1]));
+  Q(lo ? "hard" : "medium", "Which animal sleeps through the cold winter (hibernates)?", ["Bear", "Cow", "Hen", "Dog"], "Some bears sleep through winter in their dens, living on the fat stored in their bodies.", C(["🐻", "Bear", "hibernates", 1]));
+  Q("hard", "Which animal can change its colour to hide?", ["Chameleon", "Cow", "Elephant", "Sparrow"], "A chameleon changes colour to match its surroundings and hide from enemies.", C(["🦎", "Chameleon", "changes colour", 1]));
+  Q(lo ? "medium" : "easy", "Which animal is awake at night and sleeps in the day?", ["Owl", "Hen", "Cow", "Butterfly"], "Owls are nocturnal. Their big eyes help them see in the dark.", C(["🦉", "Owl", "awake at night", 1]));
+  Q(lo ? "medium" : "easy", "Which animal can live in the desert for many days without water?", ["Camel", "Frog", "Fish", "Duck"], "A camel stores fat in its hump and loses very little water.", C(["🐫", "Camel", "desert", 1]));
+  ANIMALS.filter(a => a.gives).forEach(a => Q("easy", `What do we get from ${an(a.n)}?`, words(cap1(a.gives), ["Milk", "Eggs", "Wool", "Honey", "Silk", "Leather"]).filter((x, i, arr) => !(x.toLowerCase() === "milk" && ["cow", "goat"].includes(a.n) && i > 0)), `We get ${a.gives} from ${an(a.n)}.`, F(card(a, ""), ["", a.gives, "", 1])));
+  if (!lo) {
+    // Grade 4 also gets the grade 1 baby, home and sense questions as easy warm-ups.
+    const babies = ANIMALS.filter(a => a.baby).map(a => a.baby);
+    ANIMALS.filter(a => a.baby).forEach(a => Q("easy", `What is the young one of ${an(a.n)} called?`, words(a.baby, babies), `The young one of ${an(a.n)} is called ${an(a.baby)}.`, C(card(a, a.baby, 1))));
+    const homes = ANIMALS.filter(a => a.home).map(a => a.home);
+    ANIMALS.filter(a => a.home).forEach(a => Q("easy", `Where does ${an(a.n)} live?`, words(cap1(an(a.home)), homes.map(h => cap1(an(h)))), `${cap1(an(a.n))} lives in ${an(a.home)}.`, C(card(a, a.home, 1))));
+    MATERIAL.forEach(([e, o, m]) => Q("easy", `${cap1(an(o))} is usually made of ___.`, words(cap1(m), [...new Set(MATERIAL.map(x => cap1(x[2])))]), `${cap1(an(o))} is usually made of ${m}.`, C([e, cap1(o), m, 1])));
+    ["ant", "bee", "butterfly"].forEach(i => Q("easy", "Which of these is an insect?", [cap1(i), "Spider", "Earthworm", "Snail"], `Insects have 6 legs and 3 body parts. ${cap1(an(i))} is an insect. A spider has 8 legs.`, C(card(A(i), "6 legs", 1), card(A("spider"), "8 legs"))));
+  }
+};
+const _g1nso = G[1].nso, _g4nso = G[4].nso;
+G[1].nso = Q => { _g1nso(Q); moreNSO(Q, 1); };
+G[4].nso = Q => { _g4nso(Q); moreNSO(Q, 4); };
+
+// IEO (English) generators for grades 1 and 4. Word lists drive most templates.
+const sent = (w, hl, tag) => ({ t: "sentence", w, hl, tag });
+const vs = (a, b, la = "", lb = "") => C(["", a, la], ["", b, lb, 1]);
+
+// Spelling mistakes that look plausible: swap neighbours, drop or double a letter, swap a vowel.
+function misspell(w) {
+  const out = new Set(), lw = w.toLowerCase(), V = { a: "e", e: "i", i: "e", o: "u", u: "o" };
+  for (let i = 1; i < lw.length - 1; i++) out.add(lw.slice(0, i) + lw[i + 1] + lw[i] + lw.slice(i + 2));
+  for (let i = 1; i < lw.length; i++) if (lw[i] === lw[i - 1]) out.add(lw.slice(0, i) + lw.slice(i + 1)); else if (i < lw.length - 1 && !"aeiou".includes(lw[i]) && lw[i + 1] !== lw[i]) out.add(lw.slice(0, i) + lw[i] + lw.slice(i));
+  for (let i = 1; i < lw.length; i++) if (V[lw[i]]) out.add(lw.slice(0, i) + V[lw[i]] + lw.slice(i + 1));
+  out.delete(lw);
+  const fix = s => w[0] === w[0].toUpperCase() ? cap1(s) : s;
+  return pickN([...out], 3).map(fix);
+}
+
+const PLURAL1 = { s: ["cat", "dog", "pen", "cup", "book", "tree", "ball", "car", "bag", "hat", "star", "bird", "girl", "boy", "frog", "kite"], es: ["box", "bus", "dish", "watch", "fox", "glass", "brush", "bench"], odd: [["man", "men"], ["woman", "women"], ["child", "children"], ["mouse", "mice"], ["tooth", "teeth"], ["foot", "feet"], ["goose", "geese"]] };
+const OPP1 = [["big", "small"], ["hot", "cold"], ["up", "down"], ["in", "out"], ["day", "night"], ["happy", "sad"], ["fast", "slow"], ["tall", "short"], ["open", "close"], ["old", "new"], ["wet", "dry"], ["full", "empty"], ["left", "right"], ["yes", "no"], ["good", "bad"], ["black", "white"], ["soft", "hard"], ["light", "dark"], ["clean", "dirty"], ["early", "late"], ["near", "far"], ["push", "pull"], ["come", "go"], ["give", "take"], ["rich", "poor"], ["laugh", "cry"], ["thick", "thin"], ["inside", "outside"], ["above", "below"], ["first", "last"], ["strong", "weak"], ["sweet", "bitter"], ["loud", "quiet"], ["win", "lose"], ["start", "stop"], ["true", "false"], ["buy", "sell"], ["front", "back"]];
+const RHYME = { at: ["cat", "hat", "bat", "mat", "rat"], un: ["sun", "fun", "run", "bun"], og: ["dog", "log", "frog", "fog"], en: ["hen", "pen", "ten", "men"], ig: ["pig", "big", "dig", "wig"], op: ["top", "mop", "hop", "shop"], ake: ["cake", "lake", "make", "bake"], ing: ["king", "ring", "sing", "wing"], ee: ["tree", "bee", "see", "three"], ar: ["car", "star", "jar", "far"] };
+const AN_WORDS = ["apple", "egg", "owl", "umbrella", "ink pot", "ice cream", "orange", "elephant", "ant", "igloo", "onion", "eagle"], A_WORDS = ["ball", "cat", "dog", "kite", "mango", "pen", "tree", "bus", "yak", "zebra", "hen", "fish", "book", "lion"];
+const SPELL1 = [["🍎", "apple"], ["🍌", "banana"], ["🍊", "orange"], ["🐅", "tiger"], ["🐇", "rabbit"], ["🏫", "school"], ["🌸", "flower"], ["🏠", "house"], ["💧", "water"], ["🪑", "chair"], ["✏️", "pencil"], ["☂️", "umbrella"], ["🦋", "butterfly"], ["🐒", "monkey"], ["🪁", "kite"], ["🌈", "rainbow"], ["🦒", "giraffe"], ["🐢", "turtle"], ["🍞", "bread"], ["🪟", "window"], ["🌳", "garden"], ["🐑", "sheep"], ["🥕", "carrot"], ["🦁", "lion"], ["🚌", "bus"], ["🍉", "melon"], ["🧸", "teddy"], ["🐔", "chicken"], ["🍪", "biscuit"], ["🎈", "balloon"]];
+const SENT1 = [ // words, noun index, verb index
+  ["The dog runs fast .", 1, 2], ["Rita sings a song .", 0, 1], ["The baby sleeps .", 1, 2], ["Birds fly in the sky .", 0, 1], ["The cat drinks milk .", 1, 2], ["Ravi kicks the ball .", 0, 1], ["The girl reads a book .", 1, 2], ["Fish swim in water .", 0, 1], ["The boy eats a mango .", 1, 2], ["Mom cooks food .", 0, 1], ["The horse jumps high .", 1, 2], ["Ali writes a letter .", 0, 1], ["The bell rings loudly .", 1, 2], ["Frogs hop on leaves .", 0, 1], ["The sun shines brightly .", 1, 2], ["Neha draws a tree .", 0, 1],
+];
+const BE = [["I", "am"], ["He", "is"], ["She", "is"], ["It", "is"], ["We", "are"], ["You", "are"], ["They", "are"], ["The cat", "is"], ["The boys", "are"], ["My mother", "is"], ["The birds", "are"], ["Rahul", "is"]];
+const BE_END = ["happy", "at school", "in the garden", "very tall", "my friends", "hungry", "ready", "tired"];
+const PRON = [["Riya", "She"], ["Aman", "He"], ["The dog", "It"], ["Riya and Aman", "They"], ["My grandmother", "She"], ["The ball", "It"], ["My father", "He"], ["The children", "They"], ["The kite", "It"], ["Uncle Raj", "He"]];
+const JUMBLE = [["🐔", "hen"], ["🖊️", "pen"], ["☕", "cup"], ["🌀", "fan"], ["📦", "box"], ["🐸", "frog"], ["🐟", "fish"], ["⚽", "ball"], ["📘", "book"], ["🪁", "kite"], ["🥛", "milk"], ["🌳", "tree"], ["🦆", "duck"], ["🪑", "desk"], ["🥁", "drum"], ["🐄", "cow"], ["🐷", "pig"]];
+const CAPS = [["monday", "Monday is a day of the week."], ["delhi", "Delhi is the name of a city."], ["riya", "Riya is a person's name."], ["india", "India is the name of a country."], ["january", "January is the name of a month."], ["sunday", "Sunday is a day of the week."], ["mumbai", "Mumbai is the name of a city."], ["ganga", "Ganga is the name of a river."]];
+const COMMON = ["apple", "chair", "school", "river", "city", "garden", "pencil", "table", "doctor", "flower"];
+const CATS = { colours: ["red", "blue", "green", "yellow", "pink"], fruits: ["mango", "apple", "banana", "grapes", "orange"], animals: ["cat", "dog", "lion", "cow", "goat"], "body parts": ["hand", "nose", "leg", "ear", "eye"], numbers: ["one", "two", "three", "four", "five"] };
+const THIS = [["___ is my bag.", "This", "one thing near me"], ["___ are my books.", "These", "many things near me"], ["___ is a bird in the sky.", "That", "one thing far away"], ["___ are stars in the sky.", "Those", "many things far away"], ["___ is my pencil.", "This", "one thing near me"], ["___ are my shoes.", "These", "many things near me"], ["___ are mountains far away.", "Those", "many things far away"], ["___ is the moon up there.", "That", "one thing far away"]];
+const SOUNDS1 = [["🐕", "dog", "barks"], ["🐄", "cow", "moos"], ["🐈", "cat", "mews"], ["🦁", "lion", "roars"], ["🦆", "duck", "quacks"], ["🐝", "bee", "buzzes"], ["🐍", "snake", "hisses"], ["🐎", "horse", "neighs"], ["🐸", "frog", "croaks"], ["🦉", "owl", "hoots"]];
+
+G[1].ieo = Q => {
+  PLURAL1.s.forEach(w => Q("easy", `What is the plural of "${w}"?`, [w + "s", w + "es", w, w + "ies"], `For most words, add "s" to mean more than one: one ${w}, two ${w}s.`, F(["", w, "one"], ["", w + "s", "many", 1])));
+  PLURAL1.es.forEach(w => Q("medium", `What is the plural of "${w}"?`, [w + "es", w + "s", w, w + "ies"], `Words ending in s, x, sh or ch add "es": one ${w}, two ${w}es.`, F(["", w, "one"], ["", w + "es", "many", 1])));
+  PLURAL1.odd.forEach(([w, p]) => Q("hard", `What is the plural of "${w}"?`, [p, w + "s", w + "es", p + "s"], `"${cap1(w)}" changes inside to make the plural: one ${w}, two ${p}.`, F(["", w, "one"], ["", p, "many", 1])));
+  const rights = OPP1.map(p => p[1]);
+  OPP1.forEach(([a, b], i) => Q(i < 20 ? "easy" : "medium", `What is the opposite of "${a}"?`, words(b, rights, [a]), `"${cap1(a)}" and "${b}" are opposites: they mean very different things.`, vs(a, b)));
+  OPP1.slice(0, 20).forEach(([a, b]) => Q("medium", `What is the opposite of "${b}"?`, words(a, OPP1.map(p => p[0]), [b]), `"${cap1(b)}" and "${a}" are opposites.`, vs(b, a)));
+  for (const [fam, list] of Object.entries(RHYME)) list.forEach(w => {
+    const mate = pick(list.filter(x => x !== w)), others = Object.entries(RHYME).filter(([f]) => f !== fam).flatMap(([, l]) => l);
+    Q("easy", `Which word rhymes with "${w}"?`, [mate, ...pickN(others, 3)], `Rhyming words end with the same sound. "${w}" and "${mate}" both end in "${fam}".`, C(["", w, "-" + fam], ["", mate, "-" + fam, 1]));
+  });
+  AN_WORDS.forEach(w => Q("easy", `Fill in the blank: I saw ___ ${w}.`, ["an", "a", "two", "many"], `Use "an" before words that start with a vowel sound (a, e, i, o, u). "${cap1(w)}" starts with "${w[0]}", so we say "an ${w}".`, sent(`I saw an ${w} .`, 2, "an + vowel"), { k: 1 }));
+  A_WORDS.forEach(w => Q("easy", `Fill in the blank: I saw ___ ${w}.`, ["a", "an", "two", "many"], `Use "a" before words that start with a consonant sound. "${cap1(w)}" starts with "${w[0]}", so we say "a ${w}".`, sent(`I saw a ${w} .`, 2, "a + consonant"), { k: 1 }));
+  [["hour", "an", "The h in hour is silent, so it starts with a vowel sound."], ["honest man", "an", "The h in honest is silent."], ["unicorn", "a", "Unicorn starts with a 'you' sound, which is a consonant sound."], ["uniform", "a", "Uniform starts with a 'you' sound."], ["one-rupee coin", "a", "One starts with a 'w' sound."]].forEach(([w, a, why]) => Q("hard", `Fill in the blank: I saw ___ ${w}.`, [a, a === "a" ? "an" : "a", "two", "many"], `We say "${a} ${w}". ${why}`, sent(`I saw ${a} ${w} .`, 2, "sound decides"), { k: 1 }));
+  const vowelWords = [["🥚", "egg"], ["🍎", "apple"], ["🦉", "owl"], ["☂️", "umbrella"], ["🍦", "ice cream"]], consWords = [["⚽", "ball"], ["🪁", "kite"], ["🐶", "dog"], ["🐟", "fish"], ["🌳", "tree"], ["🐄", "cow"]];
+  vowelWords.forEach(v => Q("easy", "Which word begins with a vowel?", [cap1(v[1]), ...pickN(consWords, 3).map(c => cap1(c[1]))], `The vowels are a, e, i, o, u. "${cap1(v[1])}" begins with "${v[1][0]}".`, C([...v, "vowel", 1])));
+  const AL = "abcdefghijklmnopqrstuvwxyz";
+  for (let i = 1; i < 25; i++) {
+    const l = AL[i];
+    if (i % 2) Q("easy", `Which letter comes just after "${l}"?`, [AL[i + 1], AL[i - 1], AL[(i + 2) % 26], AL[(i + 5) % 26]], `Say the alphabet: … ${AL[i - 1]}, ${l}, ${AL[i + 1]} … The letter after ${l} is ${AL[i + 1]}.`, { t: "seq", items: [AL[i - 1], l, AL[i + 1]], hl: 2 });
+    else Q("easy", `Which letter comes just before "${l}"?`, [AL[i - 1], AL[i + 1], AL[(i + 3) % 26], AL[(i + 7) % 26]], `Say the alphabet: … ${AL[i - 1]}, ${l}, ${AL[i + 1]} … The letter before ${l} is ${AL[i - 1]}.`, { t: "seq", items: [AL[i - 1], l, AL[i + 1]], hl: 0 });
+    if (i < 23 && i % 3 === 0) Q("medium", `Which letter is missing? ${AL[i - 1]}, ${l}, __, ${AL[i + 2]}`, [AL[i + 1], AL[i + 3], AL[i - 2] || "z", AL[(i + 6) % 26]], `The letters go in alphabet order: ${AL[i - 1]}, ${l}, ${AL[i + 1]}, ${AL[i + 2]}.`, { t: "seq", items: [AL[i - 1], l, AL[i + 1], AL[i + 2]], hl: 2 });
+  }
+  SPELL1.forEach(([e, w]) => Q(w.length <= 5 ? "medium" : "hard", "Choose the correct spelling.", [cap1(w), ...misspell(cap1(w))], `${e} is spelt ${w.toUpperCase().split("").join("-")}.`, C([e, cap1(w), "", 1])));
+  SENT1.forEach(([s, n, v]) => {
+    const ws = s.split(" ").filter(x => x !== ".");
+    const pool = ws.filter((x, i) => i !== n && i !== v);
+    Q("medium", `Find the naming word (noun): "${s.replace(" .", ".")}"`, [ws[n], ws[v], ...pool].slice(0, 4).length === 4 ? [ws[n], ws[v], ...pool].slice(0, 4) : [ws[n], ws[v], ...pool, "is"].slice(0, 4), `A naming word names a person, animal, place or thing. "${ws[n]}" is the noun.`, sent(s, s.split(" ").indexOf(ws[n]), "noun"));
+    Q("medium", `Find the action word (verb): "${s.replace(" .", ".")}"`, [ws[v], ws[n], ...pool, "is"].slice(0, 4), `An action word tells what someone or something does. "${ws[v]}" is the action.`, sent(s, s.split(" ").indexOf(ws[v]), "action"));
+  });
+  BE.forEach(([s, b], i) => { const end = BE_END[i % BE_END.length]; Q("medium", `Fill in the blank: ${s} ___ ${end}.`, [b, ...["am", "is", "are"].filter(x => x !== b), "be"], `Use "am" with I, "is" with one person or thing (he, she, it), and "are" with you, we, they or many.`, sent(`${s} ${b} ${end} .`, s.split(" ").length, `${s.split(" ").pop()} → ${b}`), { k: 0 }); });
+  PRON.forEach(([n, p]) => Q("hard", `${n} ${p === "They" ? "are" : "is"} my friend${p === "They" ? "s" : ""}. ___ ${p === "They" ? "are" : "is"} very kind.`.replace(/The (ball|kite) is my friend\. ___ is very kind\./, `The $1 is red. ___ is new.`), [p, ...["He", "She", "It", "They"].filter(x => x !== p)], `We use ${p === "He" ? '"he" for a boy or man' : p === "She" ? '"she" for a girl or woman' : p === "It" ? '"it" for a thing or animal' : '"they" for more than one'}. ${n} → ${p}.`, C(["", n, ""], ["", p, "", 1])));
+  JUMBLE.forEach(([e, w]) => {
+    const letters = mix(w.split("")).join(", ");
+    const perms = new Set(); while (perms.size < 3) { const p = mix(w.split("")).join(""); if (p !== w) perms.add(p); if (w.length === 3 && perms.size === 2 && new Set([w, ...perms]).size === 3) break; }
+    const opts = [w, ...perms]; while (opts.length < 4) opts.push(w.split("").reverse().join("") + w[0]);
+    Q(w.length === 3 ? "medium" : "hard", `Put the letters in order to make a word: ${letters}`, opts.slice(0, 4), `The letters ${letters} make "${w}" ${e}.`, F(["🔤", letters, "mixed"], [e, w, "word", 1]));
+  });
+  CAPS.forEach(([w, why]) => Q("hard", "Which word should always begin with a capital letter?", [w, ...pickN(COMMON, 3)], `${why} Names of people, places, days and months always begin with a capital letter.`, C(["🔠", cap1(w), "name", 1])));
+  for (const [cat, list] of Object.entries(CATS)) for (let k = 0; k < 4; k++) {
+    const odd = pick(Object.entries(CATS).filter(([c]) => c !== cat)), oddW = pick(odd[1]), three = pickN(list, 3);
+    Q("medium", "Which is the odd one out?", [oddW, ...three], `${three.map(cap1).join(", ")} are all ${cat}. "${cap1(oddW)}" belongs to ${odd[0]}, so it is the odd one out.`, C(...three.map(t => ["", cap1(t), cat]), ["", cap1(oddW), odd[0], 1]));
+  }
+  THIS.forEach(([s, a, why]) => Q("hard", `Fill in the blank: ${s}`, ["This", "These", "That", "Those"].sort((x, y) => (y === a) - (x === a)), `Use "${a}" for ${why}.`, C(["👇", "This / These", "near"], ["👉", "That / Those", "far"], ["", a, why, 1])));
+  SOUNDS1.forEach(([e, a, s]) => Q("easy", `Fill in the blank: A ${a} ___.`, words(s, SOUNDS1.map(x => x[2])), `A ${a} ${s}.`, C([e, cap1(a), s, 1])));
+};
+
+// ---------- Grade 4 ----------
+const SYN = [["big", "large"], ["happy", "glad"], ["begin", "start"], ["quick", "fast"], ["small", "tiny"], ["smart", "clever"], ["end", "finish"], ["shut", "close"], ["gift", "present"], ["quiet", "silent"], ["brave", "courageous"], ["angry", "furious"], ["shout", "yell"], ["choose", "select"], ["rich", "wealthy"], ["help", "assist"], ["easy", "simple"], ["buy", "purchase"], ["wrong", "incorrect"], ["difficult", "tough"], ["scared", "afraid"], ["tired", "weary"], ["damp", "moist"], ["sad", "unhappy"], ["often", "frequently"], ["speak", "talk"], ["cold", "chilly"], ["fix", "repair"], ["ill", "sick"], ["join", "unite"], ["vanish", "disappear"], ["allow", "permit"], ["reply", "answer"], ["journey", "trip"], ["lucky", "fortunate"], ["enemy", "foe"], ["shy", "timid"], ["smell", "odour"], ["cry", "weep"], ["enough", "sufficient"], ["hide", "conceal"], ["gather", "collect"], ["little", "small"].slice(0, 0)].filter(p => p.length);
+const ANT = [["accept", "reject"], ["arrive", "depart"], ["victory", "defeat"], ["polite", "rude"], ["increase", "decrease"], ["include", "exclude"], ["maximum", "minimum"], ["success", "failure"], ["temporary", "permanent"], ["visible", "invisible"], ["honest", "dishonest"], ["friend", "enemy"], ["entrance", "exit"], ["cheap", "expensive"], ["deep", "shallow"], ["wide", "narrow"], ["sharp", "blunt"], ["smooth", "rough"], ["loose", "tight"], ["borrow", "lend"], ["always", "never"], ["asleep", "awake"], ["ascend", "descend"], ["careful", "careless"], ["appear", "disappear"], ["interior", "exterior"], ["punish", "reward"], ["natural", "artificial"], ["junior", "senior"], ["import", "export"], ["question", "answer"], ["love", "hate"], ["joy", "sorrow"], ["rise", "fall"], ["float", "sink"], ["fresh", "stale"], ["private", "public"], ["profit", "loss"], ["guilty", "innocent"], ["generous", "selfish"]];
+const PAST = { reg: [["play", "played"], ["jump", "jumped"], ["walk", "walked"], ["talk", "talked"], ["cook", "cooked"], ["help", "helped"], ["clean", "cleaned"], ["dance", "danced"], ["smile", "smiled"], ["cry", "cried"], ["carry", "carried"], ["stop", "stopped"], ["plan", "planned"], ["clap", "clapped"], ["study", "studied"]], irr: [["go", "went", "gone"], ["eat", "ate", "eaten"], ["see", "saw", "seen"], ["come", "came"], ["take", "took", "taken"], ["write", "wrote", "written"], ["sing", "sang", "sung"], ["swim", "swam", "swum"], ["drink", "drank", "drunk"], ["buy", "bought"], ["bring", "brought"], ["think", "thought"], ["teach", "taught"], ["catch", "caught"], ["sleep", "slept"], ["fly", "flew", "flown"], ["draw", "drew", "drawn"], ["give", "gave", "given"], ["speak", "spoke", "spoken"], ["break", "broke", "broken"], ["choose", "chose", "chosen"], ["drive", "drove", "driven"], ["ride", "rode", "ridden"], ["find", "found"], ["feel", "felt"], ["keep", "kept"], ["leave", "left"], ["make", "made"], ["sit", "sat"], ["stand", "stood"], ["tell", "told"], ["wear", "wore", "worn"], ["win", "won"], ["begin", "began", "begun"], ["forget", "forgot", "forgotten"], ["hide", "hid", "hidden"], ["know", "knew", "known"], ["grow", "grew", "grown"], ["throw", "threw", "thrown"]], same: ["put", "cut", "hit", "shut", "hurt", "cost"] };
+const ing = v => v.endsWith("e") && v !== "see" ? v.slice(0, -1) + "ing" : /^(sit|swim|stop|plan|clap|win|begin|forget|put|cut|hit|shut|run)$/.test(v) ? v + v.slice(-1) + "ing" : v + "ing";
+const sForm = v => /(s|sh|ch|x|o)$/.test(v) ? v + "es" : /[^aeiou]y$/.test(v) ? v.slice(0, -1) + "ies" : v + "s";
+const PLURAL4 = { ies: ["baby", "city", "lady", "story", "puppy", "cherry", "family", "country"], ys: ["boy", "toy", "key", "day", "monkey", "donkey"], ves: [["leaf", "leaves"], ["knife", "knives"], ["wolf", "wolves"], ["half", "halves"], ["shelf", "shelves"], ["wife", "wives"], ["loaf", "loaves"], ["thief", "thieves"]], fs: ["roof", "chief", "cliff"], oes: ["potato", "tomato", "hero", "echo"], odd: [["person", "people"], ["ox", "oxen"], ["cactus", "cacti"], ["sheep", "sheep"], ["deer", "deer"], ["goose", "geese"], ["woman", "women"], ["child", "children"], ["tooth", "teeth"]] };
+const COLL = [["cows", "herd"], ["sheep", "flock"], ["wolves", "pack"], ["fish", "school"], ["bees", "swarm"], ["grapes", "bunch"], ["lions", "pride"], ["monkeys", "troop"], ["ships", "fleet"], ["players", "team"], ["sailors", "crew"], ["soldiers", "army"], ["musicians", "band"], ["puppies", "litter"], ["sticks", "bundle"], ["shoes", "pair"], ["pearls", "string"], ["mountains", "range"], ["thieves", "gang"], ["geese", "gaggle"], ["stars", "galaxy"], ["books", "library"]];
+const GENDER = [["king", "queen", "medium"], ["prince", "princess", "easy"], ["actor", "actress", "easy"], ["host", "hostess", "medium"], ["waiter", "waitress", "medium"], ["hero", "heroine", "medium"], ["god", "goddess", "medium"], ["nephew", "niece", "medium"], ["uncle", "aunt", "easy"], ["husband", "wife", "easy"], ["horse", "mare", "hard"], ["bull", "cow", "hard"], ["cock", "hen", "hard"], ["drake", "duck", "hard"], ["gander", "goose", "hard"], ["son", "daughter", "easy"], ["brother", "sister", "easy"], ["father", "mother", "easy"], ["boy", "girl", "easy"], ["emperor", "empress", "medium"], ["peacock", "peahen", "medium"], ["monk", "nun", "hard"], ["tiger", "tigress", "medium"], ["grandfather", "grandmother", "easy"], ["duke", "duchess", "hard"], ["fox", "vixen", "hard"], ["landlord", "landlady", "medium"]];
+const COMP = [["tall", "taller", "tallest"], ["big", "bigger", "biggest"], ["happy", "happier", "happiest"], ["fast", "faster", "fastest"], ["small", "smaller", "smallest"], ["long", "longer", "longest"], ["short", "shorter", "shortest"], ["easy", "easier", "easiest"], ["thin", "thinner", "thinnest"], ["hot", "hotter", "hottest"], ["large", "larger", "largest"], ["wise", "wiser", "wisest"], ["busy", "busier", "busiest"], ["good", "better", "best", 1], ["bad", "worse", "worst", 1], ["many", "more", "most", 1], ["little", "less", "least", 1], ["beautiful", "more beautiful", "most beautiful", 1], ["careful", "more careful", "most careful", 1], ["far", "farther", "farthest", 1]];
+const IDIOMS = [["break the ice", "start a friendly conversation"], ["once in a blue moon", "very rarely"], ["raining cats and dogs", "raining very heavily"], ["the apple of one's eye", "someone very dear"], ["cry over spilt milk", "be sad about something that can't be changed"], ["under the weather", "feeling a little ill"], ["hit the books", "study hard"], ["get cold feet", "lose courage just before doing something"], ["see eye to eye", "agree with someone"], ["spill the beans", "tell a secret"], ["on cloud nine", "extremely happy"], ["bite off more than you can chew", "take on more than you can manage"], ["a blessing in disguise", "something good that first seemed bad"], ["in hot water", "in trouble"], ["kill two birds with one stone", "get two things done with one action"], ["hit the sack", "go to bed"], ["butterflies in the stomach", "feel nervous"], ["learn by heart", "memorise"], ["turn a deaf ear", "ignore"], ["a drop in the ocean", "a very small amount"], ["cost an arm and a leg", "be very expensive"], ["back to square one", "start again from the beginning"], ["the last straw", "the final problem that makes you lose patience"], ["a piece of cake", "very easy"]];
+const PREP = [["The shop opens ___ 9 o'clock.", "at"], ["We have a holiday ___ Sunday.", "on"], ["My birthday is ___ July.", "in"], ["She is good ___ maths.", "at"], ["Ravi is afraid ___ dogs.", "of"], ["I am fond ___ music.", "of"], ["Share the sweets ___ all the children.", "among", ["between"]], ["Divide the cake ___ the two sisters.", "between", ["among"]], ["He jumped ___ the pool.", "into", ["in"]], ["This book was written ___ Ruskin Bond.", "by"], ["She was born ___ 2016.", "in"], ["Don't be angry ___ me.", "with", ["at"]], ["Please listen ___ the teacher.", "to"], ["We are proud ___ our school.", "of"], ["Wait ___ me at the gate.", "for"], ["He has lived here ___ 2019.", "since"], ["She has been reading ___ two hours.", "for"], ["We go to bed ___ night.", "at"], ["I drink milk ___ the morning.", "in"], ["The train arrived ___ time.", "on", ["in"]]];
+const PREP_POOL = ["in", "on", "at", "of", "for", "to", "into", "since"];
+const CONJ = [["She was tired, ___ she kept working.", "but"], ["Would you like tea ___ coffee?", "or"], ["He stayed home ___ he was sick.", "because"], ["It was raining, ___ we took an umbrella.", "so"], ["Raj ___ Rita are good friends.", "and"], ["Hurry up, ___ you will miss the bus.", "or"], ["He is poor ___ honest.", "but"], ["The road was wet, ___ we drove slowly.", "so"], ["I could not come ___ I was ill.", "because"], ["I like apples ___ bananas.", "and"], ["She ran fast, ___ she missed the train.", "but"], ["We stayed indoors ___ it was very hot.", "because"]];
+const CONJ_HARD = [["Neither Sam ___ Tom came to school.", "nor", ["or", "and", "but"]], ["Either you ___ I must go.", "or", ["nor", "and", "so"]], ["___ it was cold, she did not wear a coat.", "Although", ["Because", "So", "And"]], ["Wait here ___ I come back.", "until", ["but", "or", "so"]], ["He is both clever ___ hardworking.", "and", ["or", "nor", "but"]], ["She studied hard ___ that she could pass.", "so", ["but", "or", "because"]]];
+const SPELL4 = ["beautiful", "calendar", "believe", "receive", "friend", "different", "February", "Wednesday", "library", "separate", "knowledge", "environment", "restaurant", "vegetable", "temperature", "science", "address", "beginning", "tomorrow", "especially", "chocolate", "favourite", "dictionary", "exercise", "interesting", "neighbour", "occasion", "probably", "sentence", "surprise", "thought", "unique", "lightning", "mischievous", "embarrass", "rhythm", "guard", "island", "government", "February"];
+const POS = [ // sentence, {index: tag}
+  ["The tall boy ran quickly home .", { 1: "adjective", 2: "noun", 3: "verb", 4: "adverb" }], ["She painted a beautiful picture .", { 0: "pronoun", 1: "verb", 3: "adjective", 4: "noun" }], ["The old man walked slowly to the park .", { 1: "adjective", 2: "noun", 3: "verb", 4: "adverb" }], ["We played happily in the garden .", { 0: "pronoun", 1: "verb", 2: "adverb", 3: "preposition" }], ["The little puppy slept under the table .", { 1: "adjective", 2: "noun", 3: "verb", 4: "preposition" }], ["They sang loudly at the party .", { 0: "pronoun", 1: "verb", 2: "adverb", 3: "preposition" }], ["A clever fox quietly crossed the river .", { 1: "adjective", 2: "noun", 3: "adverb", 4: "verb" }], ["He carefully opened the heavy box .", { 0: "pronoun", 1: "adverb", 2: "verb", 4: "adjective" }], ["The bright sun shines on the hills .", { 1: "adjective", 2: "noun", 3: "verb", 4: "preposition" }], ["Mira danced gracefully on the stage .", { 0: "noun", 1: "verb", 2: "adverb", 3: "preposition" }], ["The hungry lion roared loudly .", { 1: "adjective", 2: "noun", 3: "verb", 4: "adverb" }], ["I bought a red umbrella yesterday .", { 0: "pronoun", 1: "verb", 3: "adjective", 5: "adverb" }], ["The children happily ran into the field .", { 1: "noun", 2: "adverb", 3: "verb", 4: "preposition" }], ["Our kind teacher speaks softly .", { 1: "adjective", 2: "noun", 3: "verb", 4: "adverb" }], ["She quickly hid behind the curtain .", { 0: "pronoun", 1: "adverb", 2: "verb", 3: "preposition" }], ["The brave soldier fought bravely .", { 1: "adjective", 2: "noun", 3: "verb", 4: "adverb" }], ["A small bird sat on the wall .", { 1: "adjective", 2: "noun", 3: "verb", 4: "preposition" }], ["They finished the long race together .", { 0: "pronoun", 1: "verb", 3: "adjective", 4: "noun" }]];
+const POS_WHAT = { noun: "names a person, animal, place or thing", verb: "shows an action", adjective: "describes a noun", adverb: "tells how, when or where an action happens", pronoun: "takes the place of a noun", preposition: "shows where something is or how things are linked" };
+const SVA = [["The dog", "bark", "loudly at night"], ["My friends", "play", "cricket every day"], ["She", "read", "a story every night"], ["The birds", "sing", "every morning"], ["He", "go", "to school by bus"], ["The sun", "rise", "in the east"], ["We", "watch", "TV on Sundays"], ["My brother", "wash", "the car every week"], ["The baby", "cry", "when she is hungry"], ["Cats", "drink", "milk"], ["Riya", "teach", "her sister maths"], ["They", "swim", "in the river every summer"]];
+const PLURAL_SUBJ = /^(My friends|The birds|We|Cats|They)$/;
+const HOMO = [["I can ___ the birds singing.", "hear", "here"], ["Please come ___ and sit down.", "here", "hear"], ["We went to the ___ for a swim.", "sea", "see"], ["I ___ the answer to the question.", "knew", "new"], ["She bought a ___ dress.", "new", "knew"], ["Please ___ your name on the paper.", "write", "right"], ["Turn ___ at the next corner.", "right", "write"], ["There are seven days in a ___.", "week", "weak"], ["The sick puppy was very ___.", "weak", "week"], ["Mix the ___ with water to make dough.", "flour", "flower"], ["A rose is a beautiful ___.", "flower", "flour"], ["The ___ rises in the east.", "sun", "son"], ["Let's ___ at the park at five.", "meet", "meat"], ["The dog wagged its ___.", "tail", "tale"], ["She ate a juicy ___.", "pear", "pair"], ["I bought a new ___ of shoes.", "pair", "pear"], ["He ___ his bicycle to school.", "rode", "road"], ["She ate the ___ pizza by herself.", "whole", "hole"], ["They put the books over ___.", "there", "their"], ["The children packed ___ bags.", "their", "there"], ["I have ___ brothers.", "two", "too"], ["It is ___ hot to play outside.", "too", "two"]];
+const HOMO_POOL = ["hear", "here", "sea", "see", "knew", "new", "write", "right", "week", "weak", "flour", "flower", "sun", "son", "meet", "meat", "tail", "tale", "pear", "pair", "rode", "road", "whole", "hole", "there", "their", "two", "too"];
+const OWS = [["a person who writes books", "author"], ["a person who draws or paints pictures", "artist"], ["a person who flies an aeroplane", "pilot"], ["a doctor who treats sick animals", "vet"], ["a person who repairs taps and pipes", "plumber"], ["a person who bakes bread and cakes", "baker"], ["a person who cuts hair", "barber"], ["a person who sells flowers", "florist"], ["a person who makes wooden furniture", "carpenter"], ["a place where many books are kept for reading", "library"], ["a person who studies the stars and planets", "astronomer"], ["a group of twelve things", "dozen"], ["the story of a person's life written by that person", "autobiography"], ["a place where aeroplanes land and take off", "airport"], ["a book that gives the meanings of words", "dictionary"], ["a person who travels into space", "astronaut"], ["a period of ten years", "decade"], ["a period of one hundred years", "century"], ["a place where coins are made", "mint"], ["a person who looks after patients in a hospital", "nurse"], ["a place where animals are kept for people to see", "zoo"], ["a person who sells medicines", "chemist"], ["a person who catches fish", "fisherman"], ["a person who mends shoes", "cobbler"]];
+const PREFIX = [["happy", "un"], ["kind", "un"], ["able", "un"], ["like", "dis"], ["agree", "dis"], ["honest", "dis"], ["appear", "dis"], ["possible", "im"], ["polite", "im"], ["patient", "im"], ["legal", "il"], ["regular", "ir"], ["responsible", "ir"], ["correct", "in"], ["visible", "in"], ["complete", "in"]];
+const ART4 = [["He is ___ honest boy.", "an", "Honest starts with a silent h, so it begins with a vowel sound."], ["___ sun rises in the east.", "The", "There is only one sun, so we use \"the\"."], ["She is ___ European writer.", "a", "European starts with a \"you\" sound, which is a consonant sound."], ["I waited for ___ hour.", "an", "Hour starts with a silent h."], ["___ Ganga is a holy river.", "The", "We use \"the\" before names of rivers."], ["He plays ___ guitar very well.", "the", "We use \"the\" before musical instruments."], ["She is ___ MLA from our town.", "an", "MLA is said \"em-el-ay\", which starts with a vowel sound."], ["I saw ___ owl on the tree.", "an", "Owl starts with a vowel."], ["___ Himalayas are very high.", "The", "We use \"the\" before names of mountain ranges."], ["My father is ___ engineer.", "an", "Engineer starts with a vowel."]];
+
+G[4].ieo = Q => {
+  SYN.forEach(([a, b], i) => {
+    const pool = SYN.filter((_, j) => j !== i).flatMap(p => p);
+    Q(i < 15 ? "easy" : i < 30 ? "medium" : "hard", `Which word means the same as "${a}"?`, [b, ...pickN(pool, 3)], `Words with the same meaning are called synonyms. "${cap1(a)}" and "${b}" mean the same.`, vs(a, b, "", "same meaning"));
+    Q(i < 15 ? "easy" : i < 30 ? "medium" : "hard", `Choose the synonym of "${b}".`, [a, ...pickN(pool, 3)], `"${cap1(b)}" and "${a}" mean the same, so they are synonyms.`, vs(b, a, "", "same meaning"));
+  });
+  ANT.forEach(([a, b], i) => {
+    const pool = ANT.filter((_, j) => j !== i).flatMap(p => p);
+    Q(i < 12 ? "medium" : "hard", `What is the opposite of "${a}"?`, [b, ...pickN(pool, 3)], `"${cap1(a)}" and "${b}" are antonyms: they have opposite meanings.`, vs(a, b, "", "opposite"));
+    if (i < 20) Q("medium", `Choose the antonym of "${b}".`, [a, ...pickN(pool, 3)], `"${cap1(b)}" and "${a}" have opposite meanings.`, vs(b, a, "", "opposite"));
+  });
+  PAST.reg.forEach(([v, p]) => Q("easy", `What is the past tense of "${v}"?`, [p, sForm(v), ing(v), v.endsWith("y") || /stop|plan|clap/.test(v) ? v + "ed" : v + "d"].filter((x, i, a) => a.indexOf(x) === i).concat([v + "t"]).slice(0, 4), `Most verbs add "-ed" for the past.${p !== v + "ed" ? ` Watch the spelling: ${v} → ${p}.` : ""} Today I ${v}; yesterday I ${p}.`, F(["", "Today", v], ["", "Yesterday", p, 1])));
+  PAST.irr.forEach(([v, p, pp], i) => Q(i < 20 ? "medium" : "hard", `What is the past tense of "${v}"?`, [p, /e$/.test(v) ? v + "d" : v + "ed", pp && pp !== p ? pp : ing(v), sForm(v)], `"${cap1(v)}" is an irregular verb. Today I ${v}; yesterday I ${p}.${pp ? ` (We use "${pp}" with has or have.)` : ""}`, F(["", "Today", v], ["", "Yesterday", p, 1])));
+  PAST.same.forEach(v => Q("hard", `Choose the correct word: Yesterday I ___ my finger.`.replace("my finger", v === "put" ? "the book on the shelf" : v === "cut" ? "the paper with scissors" : v === "hit" ? "the ball very hard" : v === "shut" ? "the door quietly" : v === "hurt" ? "my knee while playing" : "much money"), [v, v + "ted", sForm(v), ing(v)], `"${cap1(v)}" stays the same in the past tense: today I ${v}, yesterday I ${v}.`, F(["", "Today", v], ["", "Yesterday", v, 1])));
+  PLURAL4.ies.forEach(w => Q("medium", `What is the plural of "${w}"?`, [w.slice(0, -1) + "ies", w + "s", w + "es", w.slice(0, -1) + "is"], `When a word ends in a consonant + y, change y to i and add "es": ${w} → ${w.slice(0, -1)}ies.`, F(["", w, "one"], ["", w.slice(0, -1) + "ies", "many", 1])));
+  PLURAL4.ys.forEach(w => Q("hard", `What is the plural of "${w}"?`, [w + "s", w.slice(0, -1) + "ies", w + "es", w.slice(0, -1) + "is"], `When a vowel comes before the y, just add "s": ${w} → ${w}s.`, F(["", w, "one"], ["", w + "s", "many", 1])));
+  PLURAL4.ves.forEach(([w, p]) => Q("medium", `What is the plural of "${w}"?`, [p, w + "s", w + "es", p + "s"], `Many words ending in f or fe change to "ves": ${w} → ${p}.`, F(["", w, "one"], ["", p, "many", 1])));
+  PLURAL4.fs.forEach(w => Q("hard", `What is the plural of "${w}"?`, [w + "s", w.replace(/f+$/, "ves"), w + "es", w.replace(/f+$/, "fes")], `Some words ending in f just add "s": ${w} → ${w}s.`, F(["", w, "one"], ["", w + "s", "many", 1])));
+  PLURAL4.oes.forEach(w => Q("medium", `What is the plural of "${w}"?`, [w + "es", w + "s", w.slice(0, -1) + "ies", w], `Some words ending in o add "es": ${w} → ${w}es.`, F(["", w, "one"], ["", w + "es", "many", 1])));
+  PLURAL4.odd.forEach(([w, p]) => Q("hard", `What is the plural of "${w}"?`, [p, w + "s", w + "es", p === w ? w + "en" : p + "s"], p === w ? `"${cap1(w)}" stays the same: one ${w}, many ${w}.` : `"${cap1(w)}" has a special plural: ${w} → ${p}.`, F(["", w, "one"], ["", p, "many", 1])));
+  const colls = COLL.map(c => c[1]);
+  COLL.forEach(([n, c], i) => Q(i < 12 ? "medium" : "hard", `Fill in the collective noun: a ___ of ${n}`, words(c, colls), `A group of ${n} is called a ${c}.`, C(["", c, `of ${n}`, 1])));
+  GENDER.forEach(([m, f, d]) => {
+    const fem = GENDER.map(g => g[1]);
+    Q(d, `What is the feminine of "${m}"?`, [f, ...pickN(fem.filter(x => x !== f), 2), m.endsWith("ess") ? m + "e" : m + "ess"], `${cap1(m)} → ${f}.`, vs(m, f, "male", "female"));
+  });
+  COMP.forEach(([a, c, s, irr]) => {
+    Q(irr ? "hard" : "medium", `Fill in the blank: This one is ___ than that one. (${a})`, [c, s, a, irr ? (c.startsWith("more") ? a + "er" : "more " + a) : "more " + a], `When comparing two things we use the comparative form: ${a} → ${c}.`, F(["", a, ""], ["", c, "2 things", 1], ["", s, "3 or more"]));
+    Q(irr ? "hard" : "medium", `Fill in the blank: This is the ___ of all. (${a})`, [s, c, a, irr ? (s.startsWith("most") ? a + "est" : "most " + a) : "most " + a], `When comparing three or more things we use the superlative: ${a} → ${s}.`, F(["", a, ""], ["", c, "2 things"], ["", s, "3 or more", 1]));
+  });
+  const meanings = IDIOMS.map(i => i[1]);
+  IDIOMS.forEach(([i, m]) => Q("hard", `What does the idiom "${i}" mean?`, words(cap1(m), meanings.map(cap1)), `An idiom has a meaning different from its words. "${cap1(i)}" means "${m}".`, F(["💬", i, ""], ["💡", cap1(m), "", 1])));
+  PREP.forEach(([s, p, not]) => Q("medium", `Fill in the blank: ${s}`, words(p, PREP_POOL, not || []), `The correct word is "${p}": ${s.replace("___", p)}`, sent(s.replace("___", p).replace(/([.?!])$/, " $1"), s.split(" ").indexOf("___"), "preposition")));
+  CONJ.forEach(([s, c]) => Q("medium", `Fill in the blank: ${s}`, words(c, ["and", "but", "or", "so", "because"]), `"${cap1(c)}" ${c === "and" ? "adds two ideas together" : c === "but" ? "joins two opposite ideas" : c === "or" ? "gives a choice" : c === "so" ? "shows a result" : "gives a reason"}.`, sent(s.replace("___", c).replace(/([.?!])$/, " $1"), s.split(" ").indexOf("___"), "joining word")));
+  CONJ_HARD.forEach(([s, c, w]) => Q("hard", `Fill in the blank: ${s}`, [c, ...w], `The correct word is "${c}": ${s.replace("___", c)}`, sent(s.replace("___", c).replace(/([.?!])$/, " $1"), s.split(" ").indexOf("___"), "conjunction")));
+  [...new Set(SPELL4)].forEach((w, i) => Q(i < 15 ? "medium" : "hard", "Which word is spelt correctly?", [w, ...misspell(w)], `The correct spelling is ${w.toUpperCase().split("").join("-")}.`, C(["✍️", w, "", 1])));
+  POS.forEach(([s, tags]) => {
+    const ws = s.split(" ");
+    for (const [i, t] of Object.entries(tags)) {
+      const others = Object.entries(tags).filter(([j]) => j !== i).map(([j]) => ws[j]);
+      Q(t === "noun" || t === "verb" ? "easy" : t === "adjective" ? "medium" : "hard", `Which word is ${an(t)} in: "${s.replace(" .", ".")}"`, [ws[i], ...others], `${cap1(an(t))} ${POS_WHAT[t]}. Here, "${ws[i]}" is the ${t}.`, sent(s, +i, t));
+    }
+  });
+  SVA.forEach(([s, v, rest]) => {
+    const pl = PLURAL_SUBJ.test(s), ans = pl ? v : sForm(v);
+    Q("medium", `Fill in the blank: ${s} ___ ${rest}.`, [ans, pl ? sForm(v) : v, ing(v), "to " + v], pl ? `"${s}" means more than one, so the verb has no -s: ${s} ${v}.` : `With one person or thing (he, she, it), add -s or -es to the verb: ${s} ${ans}.`, sent(`${s} ${ans} ${rest} .`, s.split(" ").length, pl ? "many → no s" : "one → s"));
+  });
+  HOMO.forEach(([s, w, h]) => Q("hard", `Fill in the blank: ${s}`, [w, h, ...pickN(HOMO_POOL.filter(x => x !== w && x !== h), 2)], `"${cap1(w)}" and "${h}" sound the same but have different meanings and spellings. Here the right word is "${w}".`, sent(s.replace("___", w).replace(/([.?!])$/, " $1"), s.split(" ").indexOf("___"), "sounds like " + h)));
+  const ows = OWS.map(o => o[1]);
+  OWS.forEach(([d, w], i) => Q(i < 10 ? "medium" : "hard", `One word for ${d}:`, words(w, ows), `${cap1(d)} is called ${an(w)}.`, C(["💡", w, "", 1])));
+  PREFIX.forEach(([w, p]) => Q(p === "un" || p === "dis" ? "medium" : "hard", `Which word is the opposite of "${w}"?`, [p + w, ...["un", "dis", "im", "in", "il", "ir"].filter(x => x !== p).slice(0, 3).map(x => x + w)], `Adding "${p}-" makes the opposite: ${w} → ${p}${w}.`, F(["", w, ""], ["", `${p}- + ${w}`, ""], ["", p + w, "", 1])));
+  ART4.forEach(([s, a, why]) => Q(a.toLowerCase() === "the" ? "medium" : "hard", `Fill in the blank: ${s}`, a[0] === a[0].toUpperCase() ? [a, ...["A", "An", "The"].filter(x => x !== a), "No word"] : [a, ...["a", "an", "the"].filter(x => x !== a), "no word"], why, sent(s.replace("___", a).replace(/([.?!])$/, " $1"), s.split(" ").indexOf("___"), "article"), { k: 0 }));
+  OPP1.forEach(([a, b]) => Q("easy", `Which word is the opposite of "${a}"?`, words(b, OPP1.map(p => p[1]), [a]), `"${cap1(a)}" and "${b}" are opposites.`, vs(a, b, "", "opposite")));
+  PLURAL1.s.concat(PLURAL1.es).forEach(w => { const p = PLURAL1.es.includes(w) ? w + "es" : w + "s"; Q("easy", `Which is the correct plural of "${w}"?`, [p, p === w + "s" ? w + "es" : w + "s", w + "ies", w + "en"], `${PLURAL1.es.includes(w) ? 'Words ending in s, x, sh or ch add "es"' : 'Most words just add "s"'}: ${w} → ${p}.`, F(["", w, "one"], ["", p, "many", 1])); });
+  [["Where are you going", "?"], ["What a lovely day", "!"], ["I live in Pune", "."], ["How old are you", "?"], ["Wow, we won the match", "!"], ["Please close the door", "."]].forEach(([s, p]) => Q(p === "!" ? "hard" : "easy", `Which mark should end this sentence? "${s}"`, [p, ...[".", "?", "!", ","].filter(x => x !== p)], p === "?" ? "It asks a question, so it ends with a question mark." : p === "!" ? "It shows strong feeling, so it ends with an exclamation mark." : "It is a statement or request, so it ends with a full stop.", sent(`${s} ${p}`, s.split(" ").length, p === "?" ? "question" : p === "!" ? "strong feeling" : "full stop"), { k: 0 }));
+};
+
+</script>
+<script>
 const SUBJ = [
   { key: "imo", code: "IMO", name: "Maths" },
   { key: "nso", code: "NSO", name: "Science" },
@@ -422,20 +1304,27 @@ const VIZ = {
     return svg(ox * 2 + W, oy + H + 30, o);
   },
   shape({ name, sym }) {
-    let pts = name === "triangle" ? [[90, 14], [166, 146], [14, 146]] : [[20, 10], [160, 10], [160, 150], [20, 150]];
+    if (name === "circle") return svg(180, 162, `<circle cx="90" cy="81" r="70" class="shp"/>` + T(90, 81, "no corners", "cap"));
+    const pts = name === "triangle" ? [[90, 14], [166, 146], [14, 146]] : name === "rectangle" ? [[10, 30], [170, 30], [170, 130], [10, 130]] : [[20, 10], [160, 10], [160, 150], [20, 150]];
     let o = `<polygon points="${pts.map(p => p.join(",")).join(" ")}" class="shp"/>`;
     if (sym) o += `<line x1="90" y1="0" x2="90" y2="160" class="symm"/><line x1="10" y1="80" x2="170" y2="80" class="symm"/><line x1="10" y1="0" x2="170" y2="160" class="symm"/><line x1="170" y1="0" x2="10" y2="160" class="symm"/>`;
     else {
-      pts.forEach(([x, y], k) => o += `<circle cx="${x}" cy="${y}" r="8" class="corner"/>`);
-      pts.forEach(([x, y], k) => { const [a, b] = pts[(k + 1) % pts.length], mx = (x + a) / 2, my = (y + b) / 2, cx = 90, cy = 90; const dx = mx - cx, dy = my - cy, l = Math.hypot(dx, dy); o += T(mx + dx / l * 16, my + dy / l * 16, k + 1, "jl"); });
+      pts.forEach(([x, y]) => o += `<circle cx="${x}" cy="${y}" r="8" class="corner"/>`);
+      pts.forEach(([x, y], k) => { const [a, b] = pts[(k + 1) % pts.length], mx = (x + a) / 2, my = (y + b) / 2, dx = mx - 90, dy = my - 80, l = Math.hypot(dx, dy) || 1; o += T(mx + dx / l * 16, my + dy / l * 16, k + 1, "jl"); });
     }
     return svg(180, 162, o);
   },
   angle({ deg }) {
-    const cx = 30, cy = 130, L = 120, a = deg * Math.PI / 180;
+    const wide = deg > 90, cx = wide ? 140 : 30, cy = 130, L = 120, a = deg * Math.PI / 180, W = wide ? 280 : 170;
     let o = `<line x1="${cx}" y1="${cy}" x2="${cx + L}" y2="${cy}" class="ray"/><line x1="${cx}" y1="${cy}" x2="${cx + L * Math.cos(a)}" y2="${cy - L * Math.sin(a)}" class="ray"/>`;
-    o += deg === 90 ? `<path d="M${cx + 20} ${cy} V${cy - 20} H${cx}" class="arc"/>` : `<path d="M${cx + 30} ${cy} A30 30 0 0 0 ${cx + 30 * Math.cos(a)} ${cy - 30 * Math.sin(a)}" class="arc"/>`;
-    return svg(170, 140, o + T(cx + 62, cy - 42, deg + "°", "big"));
+    o += deg === 90 ? `<path d="M${cx + 20} ${cy} V${cy - 20} H${cx}" class="arc"/>` : `<path d="M${cx + 30} ${cy} A30 30 0 0 0 ${cx + 30 * Math.cos(a)} ${cy - 30 * Math.sin(a) - (deg === 180 ? 0.01 : 0)}" class="arc"/>`;
+    const la = a / 2;
+    return svg(W, 140, o + T(cx + 58 * Math.cos(la), cy - 58 * Math.sin(la) - (deg === 180 ? 22 : 0), deg + "°", "big"));
+  },
+  count({ n, i, plain }) {
+    const per = 5, g = 34, rows = Math.ceil(n / per), w = Math.min(n, per) * g; let o = "";
+    for (let k = 0; k < n; k++) { const x = (k % per) * g + g / 2, y = Math.floor(k / per) * (plain ? g : g + 14) + g / 2; o += E(x, y, i, 24) + (plain ? "" : T(x, y + 22, k + 1, "jl")); }
+    return svg(w, rows * (plain ? g : g + 14) + 4, o);
   },
   bars({ items, hl }) {
     const max = Math.max(...items.map(i => i[1])), bw = 44, gap = 20, H = 120, W = items.length * (bw + gap); let o = `<line x1="0" y1="${H + 12}" x2="${W}" y2="${H + 12}" class="axis"/>`;
@@ -487,22 +1376,37 @@ function start() {
   <section class="hero">
     <span class="eyebrow">Olympiad practice · IMO · NSO · IEO</span>
     <h1>Which grade are you practising today?</h1>
-    <p>Pick your grade to begin. You will get 10 fresh questions in each subject, with a picture explanation after every answer.</p>
+    <p>Pick your grade to begin. Each subject has a bank of 300 questions. Every test draws 10 new ones per subject (4 easy, 4 medium and 2 hard), with a picture explanation after every answer.</p>
   </section>
   <div class="grades">
     <button class="grade" id="g1" data-g="1"><span class="num">1</span><span class="lbl">Grade 1</span><span class="sub">Counting, shapes, plants, animals and first words</span></button>
     <button class="grade" id="g4" data-g="4"><span class="num">4</span><span class="lbl">Grade 4</span><span class="sub">Fractions, area, the solar system, tenses and idioms</span></button>
   </div>
   <div class="plan">
-    <div style="--c:var(--imo)"><b>IMO · Maths</b><span>10 questions · 20 minutes</span></div>
-    <div style="--c:var(--nso)"><b>NSO · Science</b><span>10 questions · 20 minutes</span></div>
-    <div style="--c:var(--ieo)"><b>IEO · English</b><span>10 questions · 20 minutes</span></div>
+    <div style="--c:var(--imo)"><b>IMO · Maths</b><span>10 questions · 20 minutes · 4 easy, 4 medium, 2 hard</span></div>
+    <div style="--c:var(--nso)"><b>NSO · Science</b><span>10 questions · 20 minutes · 4 easy, 4 medium, 2 hard</span></div>
+    <div style="--c:var(--ieo)"><b>IEO · English</b><span>10 questions · 20 minutes · 4 easy, 4 medium, 2 hard</span></div>
   </div>`;
   app.querySelectorAll(".grade").forEach(b => b.onclick = () => greet(+b.dataset.g));
 }
 
+const POOLS = {}, MIX = { easy: 4, medium: 4, hard: 2 };
+const store = { get(k) { try { return JSON.parse(localStorage.getItem(k) || "[]"); } catch (e) { return []; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
+// 4 easy, 4 medium, 2 hard, easy first. Questions this browser has already seen are skipped until a tier runs out.
+function drawSet(g, key) {
+  const pool = POOLS[g + key] || (POOLS[g + key] = buildPool(g, key, BANK[g][key].map(q => ({ ...q, d: q.d || (g === 1 ? "easy" : "medium") }))));
+  const sk = `olympiad-seen-${g}-${key}`, seen = new Set(store.get(sk)), out = [];
+  for (const d of ["easy", "medium", "hard"]) {
+    let fresh = pool[d].filter(q => !seen.has(q.id));
+    if (fresh.length < MIX[d]) { pool[d].forEach(q => seen.delete(q.id)); fresh = pool[d].slice(); }
+    out.push(...shuffle(fresh).slice(0, MIX[d]));
+  }
+  out.forEach(q => seen.add(q.id)); store.set(sk, [...seen]);
+  return out;
+}
+
 function greet(g) {
-  S = { grade: g, cur: 0, sections: SUBJ.map(s => ({ ...s, qs: shuffle(BANK[g][s.key]).slice(0, PER_SECTION).map(q => ({ ...q, opts: q.k ? q.o.slice() : shuffle(q.o) })), idx: 0, res: [], endAt: 0, done: false, timeUp: false })) };
+  S = { grade: g, cur: 0, sections: SUBJ.map(s => ({ ...s, qs: drawSet(g, s.key).map(q => ({ ...q, opts: q.k ? q.o.slice() : shuffle(q.o) })), idx: 0, res: [], endAt: 0, done: false, timeUp: false })) };
   app.innerHTML = `
   <section class="greet">
     <h1>Hello ${NAMES[g]} <span aria-hidden="true">👋</span></h1>
@@ -538,7 +1442,7 @@ function tick() {
 function renderQ() {
   const sec = S.sections[S.cur], q = sec.qs[sec.idx];
   app.innerHTML = `
-  <div class="qhead"><span class="subj">${sec.code} · ${sec.name}</span><span class="count">Question ${sec.idx + 1} of ${sec.qs.length}</span></div>
+  <div class="qhead"><span class="subj">${sec.code} · ${sec.name}</span><span class="count"><span class="lvl ${q.d}">${q.d}</span> Question ${sec.idx + 1} of ${sec.qs.length}</span></div>
   <div class="dots">${sec.qs.map((_, k) => `<i class="${k < sec.res.length ? (sec.res[k] ? "ok" : "bad") : k === sec.idx ? "cur" : ""}"></i>`).join("")}</div>
   <article class="qcard">
     <p class="qtext">${esc(q.q)}</p>
@@ -594,7 +1498,8 @@ function results() {
     <h2>${pct >= .8 ? "Superstar" : pct >= .5 ? "Great effort" : "Nice try"}, ${NAMES[S.grade]}!</h2>
     <div class="score">${total}<small> / ${max}</small></div>
     <div class="rows">${S.sections.map(s => { const sc = s.res.filter(Boolean).length; return `<div class="row"><span class="nm">${s.code} · ${s.name}</span><b>${sc} / ${s.qs.length}</b><span class="meter"><i style="width:${sc / s.qs.length * 100}%;background:var(--${s.key})"></i></span></div>`; }).join("")}</div>
-    <p class="muted">Every new attempt picks a different set of questions.</p>
+    <div class="lvls">${["easy", "medium", "hard"].map(d => { const all = S.sections.flatMap(s => s.qs.map((q, i) => [q, s.res[i]])).filter(([q]) => q.d === d); return `<span class="lvl ${d}">${d}</span> ${all.filter(x => x[1]).length} / ${all.length}`; }).join(" &nbsp; ")}</div>
+    <p class="muted">Every new attempt picks a different set from the 300-question banks.</p>
     <div class="btns"><button class="btn" id="again">Practise again with new questions</button><button class="btn ghost" id="home">Choose another grade</button></div>
   </section>`;
   document.getElementById("again").onclick = () => greet(S.grade);
