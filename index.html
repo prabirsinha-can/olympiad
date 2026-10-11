@@ -1,0 +1,610 @@
+<title>Olympiad Practice Desk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Grandstander:wght@600;800&family=Lexend:wght@400;500;600&display=swap">
+<style>
+/* Layout: one exercise-book column on graph paper; a sticky timer strip on top, each subject tinted by its own ink. */
+:root {
+  --paper: #f5f7fc; --grid: #e3e8f4; --card: #ffffff; --ink: #1d2240; --muted: #5b6288; --line: #d6dcec;
+  --imo: #d9532c; --nso: #16936a; --ieo: #6a4fd6;
+  --ok: #158a52; --okbg: #e3f5ea; --bad: #cc3434; --badbg: #fbe7e7; --hl: #ffd84d; --hlink: #3d2f00;
+  --acc: var(--imo);
+  --f-display: "Grandstander", "Comic Sans MS", "Trebuchet MS", system-ui, sans-serif;
+  --f-body: "Lexend", "Segoe UI", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #121528; --grid: #1b2038; --card: #1a1f37; --ink: #edf0fb; --muted: #a2a8c8; --line: #2c3253;
+  --imo: #ff7b55; --nso: #3ccb93; --ieo: #a08bff; --ok: #4fd18c; --okbg: #163627; --bad: #ff7070; --badbg: #3d1b22; --hl: #e8b923; --hlink: #1d1600;
+  color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --paper: #121528; --grid: #1b2038; --card: #1a1f37; --ink: #edf0fb; --muted: #a2a8c8; --line: #2c3253;
+  --imo: #ff7b55; --nso: #3ccb93; --ieo: #a08bff; --ok: #4fd18c; --okbg: #163627; --bad: #ff7070; --badbg: #3d1b22; --hl: #e8b923; --hlink: #1d1600;
+  color-scheme: dark; }
+body[data-subj="nso"] { --acc: var(--nso); } body[data-subj="ieo"] { --acc: var(--ieo); }
+
+* { box-sizing: border-box; }
+body {
+  background-color: var(--paper); color: var(--ink); font-family: var(--f-body); font-size: 16px; line-height: 1.5;
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 24px 24px; min-height: 100vh;
+}
+.wrap { max-width: 760px; margin: 0 auto; padding-inline: 16px; padding-block: 20px 48px; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; line-height: 1.15; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible { outline: 3px solid var(--acc); outline-offset: 3px; }
+.btn { background: var(--acc); color: #fff; border: 0; border-radius: 999px; padding: 12px 26px; font-weight: 600; font-size: 17px; box-shadow: 0 3px 0 color-mix(in srgb, var(--acc) 60%, #000); transition: transform .08s; }
+.btn:active { transform: translateY(2px); box-shadow: 0 1px 0 color-mix(in srgb, var(--acc) 60%, #000); }
+.btn.ghost { background: transparent; color: var(--ink); border: 2px solid var(--line); box-shadow: none; }
+
+/* start */
+.hero { padding-block: 28px 8px; display: grid; gap: 10px; }
+.eyebrow { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.hero h1 { font-size: clamp(34px, 7vw, 54px); font-weight: 800; }
+.hero p { margin: 0; color: var(--muted); max-width: 56ch; }
+.grades { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 24px; }
+.grade { background: var(--card); border: 2px solid var(--line); border-radius: 22px; padding: 22px; text-align: left; display: grid; gap: 6px; transition: border-color .15s, transform .15s; }
+.grade:hover { border-color: var(--ink); transform: translateY(-2px); }
+.grade .num { font-family: var(--f-display); font-size: 64px; font-weight: 800; line-height: 1; }
+.grade .lbl { font-weight: 600; font-size: 18px; }
+.grade .sub { color: var(--muted); font-size: 14px; }
+.plan { margin-top: 28px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.plan div { border-top: 4px solid var(--c); padding-top: 8px; min-width: 0; }
+.plan b { font-family: var(--f-display); font-size: 20px; color: var(--c); display: block; }
+.plan span { color: var(--muted); font-size: 14px; }
+@media (max-width: 520px) { .plan { grid-template-columns: 1fr; } }
+
+/* greeting */
+.greet { text-align: center; padding-block: 40px 20px; display: grid; gap: 14px; justify-items: center; }
+.greet h1 { font-size: clamp(44px, 11vw, 84px); font-weight: 800; color: var(--imo); }
+.greet h1 span { display: inline-block; animation: wave 1.6s ease-in-out 2; transform-origin: 70% 70%; }
+@keyframes wave { 0%,100% { transform: rotate(0) } 20% { transform: rotate(16deg) } 40% { transform: rotate(-8deg) } 60% { transform: rotate(12deg) } }
+.greet p { margin: 0; max-width: 46ch; color: var(--muted); }
+.rules { list-style: none; padding: 0; margin: 8px 0 10px; display: grid; gap: 8px; text-align: left; max-width: 460px; width: 100%; }
+.rules li { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; }
+
+/* quiz top strip */
+.strip { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: color-mix(in srgb, var(--paper) 92%, transparent); backdrop-filter: blur(6px); border-bottom: 1px solid var(--line); }
+.strip .in { max-width: 760px; margin: 0 auto; padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.tab { font-size: 13px; font-weight: 600; padding: 5px 11px; border-radius: 999px; border: 2px solid var(--line); color: var(--muted); }
+.tab.on { border-color: var(--acc); background: var(--acc); color: #fff; }
+.tab.done { border-color: var(--line); color: var(--ink); }
+.clocks { display: flex; gap: 14px; font-variant-numeric: tabular-nums; }
+.clk { display: grid; line-height: 1.1; }
+.clk small { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.clk b { font-family: var(--f-display); font-size: 22px; }
+.clk.warn b { color: var(--bad); }
+
+.qhead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-top: 22px; }
+.qhead .subj { font-family: var(--f-display); font-size: 22px; color: var(--acc); font-weight: 800; }
+.qhead .count { color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+.dots { display: flex; gap: 6px; margin-top: 8px; }
+.dots i { flex: 1; height: 6px; border-radius: 3px; background: var(--line); }
+.dots i.ok { background: var(--ok); } .dots i.bad { background: var(--bad); } .dots i.cur { background: var(--acc); }
+
+.qcard { background: var(--card); border: 2px solid var(--line); border-radius: 22px; padding: 22px; margin-top: 16px; display: grid; gap: 16px; }
+.qtext { font-size: 21px; font-weight: 500; line-height: 1.4; margin: 0; }
+.opts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 520px) { .opts { grid-template-columns: 1fr; } }
+.opt { display: flex; gap: 12px; align-items: center; text-align: left; background: var(--paper); border: 2px solid var(--line); border-radius: 16px; padding: 12px 14px; font-size: 17px; min-width: 0; transition: border-color .12s, background .12s; }
+.opt:hover:not(:disabled) { border-color: var(--acc); }
+.opt .k { flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; border: 2px solid var(--line); font-weight: 600; font-size: 14px; color: var(--muted); }
+.opt:disabled { cursor: default; }
+.opt.right { border-color: var(--ok); background: var(--okbg); }
+.opt.right .k { background: var(--ok); border-color: var(--ok); color: #fff; }
+.opt.wrong { border-color: var(--bad); background: var(--badbg); }
+.opt.wrong .k { background: var(--bad); border-color: var(--bad); color: #fff; }
+.opt.dim { opacity: .55; }
+
+.explain { border-radius: 18px; padding: 16px 18px; display: grid; gap: 12px; animation: pop .25s ease-out; }
+.explain.ok { background: var(--okbg); } .explain.bad { background: var(--badbg); }
+.verdict { font-family: var(--f-display); font-size: 24px; font-weight: 800; }
+.explain.ok .verdict { color: var(--ok); } .explain.bad .verdict { color: var(--bad); }
+.explain p { margin: 0; }
+.vizbox { background: var(--card); border-radius: 14px; padding: 14px; overflow-x: auto; display: flex; justify-content: center; }
+@keyframes pop { from { transform: scale(.97); opacity: .4 } to { transform: none; opacity: 1 } }
+.nav { display: flex; justify-content: flex-end; }
+
+/* SVG visuals */
+.viz { width: 100%; height: auto; display: block; overflow: visible; }
+.viz text { text-anchor: middle; dominant-baseline: central; fill: var(--ink); font-family: var(--f-body); }
+.viz .t, .viz .cap { font-size: 14px; fill: var(--muted); }
+.viz .tick { font-size: 11px; fill: var(--muted); }
+.viz .big { font-size: 17px; font-weight: 600; }
+.viz .op { font-size: 30px; font-weight: 600; }
+.viz .ansT { font-size: 19px; font-weight: 600; fill: var(--hlink); }
+.viz .ansT.sm { font-size: 13px; }
+.viz .jl { font-size: 13px; font-weight: 600; fill: var(--acc); }
+.viz .box { fill: var(--paper); stroke: var(--line); stroke-width: 1.5; }
+.viz .ans { fill: var(--hl); stroke: none; }
+.viz .bar { fill: var(--acc); opacity: .75; }
+.viz .axis, .viz .lead { stroke: var(--muted); stroke-width: 2; fill: none; }
+.viz .lead { stroke-width: 1; stroke-dasharray: 3 3; }
+.viz .jump { stroke: var(--acc); stroke-width: 2.5; fill: none; }
+.viz .startdot { fill: var(--acc); }
+.viz .markdot { fill: var(--hl); stroke: var(--ink); stroke-width: 2; }
+.viz .cross { stroke: var(--bad); stroke-width: 3; stroke-linecap: round; }
+.viz .face { fill: var(--paper); stroke: var(--ink); stroke-width: 3; }
+.viz .hand { stroke: var(--ink); stroke-linecap: round; } .viz .hand.h { stroke-width: 6; } .viz .hand.m { stroke-width: 3.5; stroke: var(--acc); }
+.viz .pin { fill: var(--ink); }
+.viz .ten { fill: var(--acc); stroke: var(--card); stroke-width: 1; } .viz .one { fill: var(--hl); stroke: var(--ink); stroke-width: 1; }
+.viz .cell { fill: color-mix(in srgb, var(--acc) 15%, var(--card)); stroke: var(--line); stroke-width: 1; }
+.viz .outline, .viz .shp { fill: none; stroke: var(--ink); stroke-width: 3; stroke-linejoin: round; }
+.viz .shp { fill: color-mix(in srgb, var(--acc) 14%, var(--card)); }
+.viz .corner { fill: var(--hl); stroke: var(--ink); stroke-width: 1.5; }
+.viz .symm { stroke: var(--acc); stroke-width: 2; stroke-dasharray: 6 5; }
+.viz .ray { stroke: var(--ink); stroke-width: 3; stroke-linecap: round; }
+.viz .arc { stroke: var(--acc); stroke-width: 2.5; fill: none; }
+.viz .setA { fill: color-mix(in srgb, var(--imo) 18%, transparent); stroke: var(--imo); stroke-width: 2; }
+.viz .setB { fill: color-mix(in srgb, var(--ieo) 18%, transparent); stroke: var(--ieo); stroke-width: 2; }
+.viz .sun { fill: #f6b72a; } .viz .pl { fill: var(--muted); } .viz .pl.on { fill: var(--acc); }
+.viz .soil { fill: color-mix(in srgb, #8a5a2b 35%, var(--card)); }
+.viz .stem { stroke: #2f9a4a; stroke-width: 5; fill: none; } .viz .leaf { fill: #3fb35d; }
+.viz .petal { fill: #f07ab0; } .viz .core { fill: #f6c21f; }
+.viz .root { stroke: #8a5a2b; stroke-width: 3; fill: none; stroke-linecap: round; }
+.viz .plank { fill: #b07a3e; } .viz .fulcrum { fill: var(--acc); }
+.viz .sumline { stroke: var(--ink); stroke-width: 2; }
+.viz .mono { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; font-size: 24px; text-anchor: end; }
+.viz .mono.ansT { font-size: 24px; }
+
+/* HTML visuals */
+.cards { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; align-items: center; }
+.cd { background: var(--paper); border: 2px solid var(--line); border-radius: 16px; padding: 10px 14px; min-width: 92px; text-align: center; display: grid; gap: 2px; }
+.cd .e { font-size: 34px; line-height: 1.2; }
+.cd .tt { font-weight: 600; }
+.cd .ss { font-size: 13px; color: var(--muted); }
+.cd.ok { background: var(--hl); border-color: var(--hl); color: var(--hlink); }
+.cd.ok .ss { color: var(--hlink); }
+.arr { font-size: 22px; color: var(--acc); font-weight: 600; }
+.sent { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; align-items: flex-start; padding-block: 4px; }
+.w { display: grid; justify-items: center; gap: 4px; }
+.w b { font-weight: 500; font-size: 20px; padding: 4px 10px; border-radius: 10px; background: var(--paper); border: 1px solid var(--line); }
+.w.on b { background: var(--hl); border-color: var(--hl); color: var(--hlink); font-weight: 600; }
+.w small { font-size: 12px; color: var(--acc); font-weight: 600; }
+
+/* section summary + results */
+.panel { background: var(--card); border: 2px solid var(--line); border-radius: 22px; padding: 26px; margin-top: 24px; display: grid; gap: 16px; justify-items: start; }
+.panel h2 { font-size: 32px; }
+.score { font-family: var(--f-display); font-size: 64px; font-weight: 800; color: var(--acc); line-height: 1; font-variant-numeric: tabular-nums; }
+.score small { font-size: 26px; color: var(--muted); }
+.rows { display: grid; gap: 10px; width: 100%; }
+.row { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; align-items: center; }
+.row .nm { font-weight: 600; }
+.row .meter { grid-column: 1 / -1; height: 10px; background: var(--paper); border-radius: 5px; overflow: hidden; border: 1px solid var(--line); }
+.row .meter i { display: block; height: 100%; border-radius: 5px; }
+.row b { font-variant-numeric: tabular-nums; }
+.btns { display: flex; flex-wrap: wrap; gap: 10px; }
+.muted { color: var(--muted); margin: 0; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<div id="strip" class="strip" hidden></div>
+<main class="wrap" id="app"></main>
+
+<script>
+// Question bank. The first option in "o" is always the right answer; options are shuffled at runtime.
+// v = explanation visual, qv = visual shown with the question, k = keep option order.
+const C = (...items) => ({ t: "cards", items });
+const F = (...items) => ({ t: "cards", items, arrow: true });
+
+const BANK = {
+  1: {
+    imo: [
+      { q: "What is 7 + 5?", o: ["12", "11", "13", "10"], e: "Put 7 apples and 5 apples together, then count them all. 7 and 3 more makes 10, and 2 more makes 12.", v: { t: "add", a: 7, b: 5, i: "🍎" } },
+      { q: "Which number comes just after 49?", o: ["50", "48", "59", "40"], e: "Move one step to the right on the number line. After 49 comes 50.", v: { t: "numline", from: 45, to: 52, start: 49, jumps: [1] } },
+      { q: "What is 15 − 6?", o: ["9", "8", "10", "11"], e: "Start at 15 and jump back 6 steps on the number line. You land on 9.", v: { t: "numline", from: 7, to: 16, start: 15, jumps: [-6] } },
+      { q: "How many sides does a triangle have?", o: ["3", "4", "5", "6"], e: "Count the straight sides of a triangle: 1, 2, 3. A triangle also has 3 corners.", v: { t: "shape", name: "triangle" } },
+      { q: "Find the missing number: 2, 4, 6, __, 10", o: ["8", "7", "9", "12"], e: "Each number is 2 more than the one before it. 6 + 2 = 8, and 8 + 2 = 10.", v: { t: "seq", items: ["2", "4", "6", "8", "10"], hl: 3, rule: "+2" } },
+      { q: "Riya has 3 bags. There are 2 balls in each bag. How many balls does she have?", o: ["6", "5", "9", "8"], e: "3 bags with 2 balls each: 2 + 2 + 2 = 6 balls.", v: { t: "array", r: 3, c: 2, i: "⚽" } },
+      { q: "Which is the biggest number?", o: ["83", "38", "58", "35"], e: "Look at the tens first. 83 has 8 tens, which is more than 3 tens or 5 tens. So 83 is the biggest.", v: { t: "bars", items: [["38", 38], ["83", 83], ["58", 58], ["35", 35]], hl: 1 } },
+      { q: "What time does this clock show?", qv: { t: "clock", h: 3, m: 0 }, o: ["3 o'clock", "12 o'clock", "9 o'clock", "6 o'clock"], e: "The long hand points to 12, so it is an exact hour. The short hand points to 3, so it is 3 o'clock.", v: { t: "clock", h: 3, m: 0 } },
+      { q: "What is half of 10?", o: ["5", "2", "10", "8"], e: "Half means sharing into 2 equal groups. 10 shared into 2 groups gives 5 in each group.", v: { t: "array", r: 2, c: 5, i: "🍬", cap: "10 shared in 2 groups = 5 each" } },
+      { q: "How many tens are there in 47?", o: ["4", "7", "40", "11"], e: "47 is made of 4 tens and 7 ones. Each tall stick is one ten.", v: { t: "place", n: 47 } },
+      { q: "Which shape looks like a ball?", o: ["Sphere", "Cube", "Cone", "Cylinder"], e: "A ball is round all over, like a sphere. A dice is a cube, an ice-cream cone is a cone, and a can is a cylinder.", v: C(["⚽", "Sphere", "ball", 1], ["🎲", "Cube", "dice"], ["🍦", "Cone", "ice-cream"], ["🥫", "Cylinder", "can"]) },
+      { q: "Aman has 4 coins of ₹5. How much money does he have?", o: ["₹20", "₹9", "₹15", "₹25"], e: "Count in fives, one jump for each coin: 5, 10, 15, 20. He has ₹20.", v: { t: "numline", from: 0, to: 20, start: 0, jumps: [5, 5, 5, 5], every: 5 } },
+      { q: "Which number is 10 more than 36?", o: ["46", "37", "26", "63"], e: "Adding 10 adds one more ten. 36 has 3 tens, so 10 more has 4 tens: 46.", v: { t: "numline", from: 30, to: 50, start: 36, jumps: [10], every: 2 } },
+      { q: "9 birds sit on a tree. 4 birds fly away. How many birds are left?", o: ["5", "4", "13", "6"], e: "Start with 9 birds and take away the 4 that flew. 5 birds are still on the tree.", v: { t: "sub", a: 9, b: 4, i: "🐦" } },
+      { q: "Today is Monday. Which day will it be after 2 days?", o: ["Wednesday", "Tuesday", "Thursday", "Sunday"], e: "Count two days forward from Monday: Tuesday is 1, Wednesday is 2.", v: { t: "seq", items: ["Mon", "Tue", "Wed", "Thu", "Fri"], hl: 2, rule: "+1 day" } },
+      { q: "How many corners does a square have?", o: ["4", "3", "2", "5"], e: "A square has 4 equal sides and 4 corners. Count the dots at the corners.", v: { t: "shape", name: "square" } },
+      { q: "What is 20 + 30?", o: ["50", "23", "60", "40"], e: "2 tens and 3 tens make 5 tens. 5 tens is 50.", v: { t: "numline", from: 0, to: 60, start: 20, jumps: [30], step: 10 } },
+    ],
+    nso: [
+      { q: "Which part of a plant grows under the soil?", o: ["Root", "Leaf", "Flower", "Fruit"], e: "Roots grow under the soil. They hold the plant firmly and drink water from the soil.", v: { t: "plant", hl: "root" } },
+      { q: "Which animal gives us milk?", o: ["Cow", "Hen", "Dog", "Parrot"], e: "A cow gives us milk. A hen gives us eggs.", v: C(["🐄", "Cow", "milk", 1], ["🐔", "Hen", "eggs"], ["🐝", "Bee", "honey"], ["🐑", "Sheep", "wool"]) },
+      { q: "We see with our ___.", o: ["Eyes", "Ears", "Nose", "Tongue"], e: "Each sense organ has a job. Eyes help us see colours and shapes.", v: C(["👀", "Eyes", "see", 1], ["👂", "Ears", "hear"], ["👃", "Nose", "smell"], ["👅", "Tongue", "taste"]) },
+      { q: "Which of these is a living thing?", o: ["Tree", "Stone", "Chair", "Car"], e: "Living things grow, breathe and need food and water. A tree does all of these. A stone does not.", v: C(["🌳", "Tree", "grows, breathes", 1], ["🪨", "Stone", "does not grow"], ["🪑", "Chair", "does not grow"]) },
+      { q: "A baby dog is called a ___.", o: ["Puppy", "Kitten", "Calf", "Cub"], e: "Baby animals have special names. A baby dog is a puppy.", v: C(["🐕", "Dog", "puppy", 1], ["🐈", "Cat", "kitten"], ["🐄", "Cow", "calf"], ["🦁", "Lion", "cub"]) },
+      { q: "Which animal lives in water?", o: ["Fish", "Lion", "Goat", "Cat"], e: "A fish lives in water. It breathes with gills and swims with fins.", v: F(["🐟", "Fish", "gills", 1], ["🌊", "Water", "its home"]) },
+      { q: "We get light and heat from the ___.", o: ["Sun", "Moon", "Clouds", "Rainbow"], e: "The Sun gives us light and heat. The Moon only looks bright because sunlight falls on it.", v: F(["☀️", "Sun", "", 1], ["💡", "Light", ""], ["🔥", "Heat", ""]) },
+      { q: "Which food helps us grow strong?", o: ["Milk", "Chips", "Candy", "Cola"], e: "Milk has calcium that makes our bones and teeth strong. Chips, candy and cola are junk food.", v: C(["🥛", "Milk", "healthy", 1], ["🍟", "Chips", "junk"], ["🍬", "Candy", "junk"]) },
+      { q: "Which is the hottest season?", o: ["Summer", "Winter", "Rainy", "Spring"], e: "In summer the Sun shines strongly and days are long, so it is the hottest season.", v: C(["☀️", "Summer", "hot", 1], ["🌧️", "Rainy", "wet"], ["❄️", "Winter", "cold"], ["🌸", "Spring", "pleasant"]) },
+      { q: "Where does a bird live?", o: ["Nest", "Kennel", "Stable", "Burrow"], e: "Birds build nests with twigs and grass. A dog lives in a kennel, a horse in a stable and a rabbit in a burrow.", v: C(["🐦", "Bird", "nest", 1], ["🐕", "Dog", "kennel"], ["🐎", "Horse", "stable"], ["🐇", "Rabbit", "burrow"]) },
+      { q: "Which of these floats on water?", o: ["Paper boat", "Stone", "Iron nail", "Coin"], e: "Light things like a paper boat float. Heavy things like a stone, nail or coin sink.", v: C(["⛵", "Paper boat", "floats", 1], ["🪨", "Stone", "sinks"], ["🪙", "Coin", "sinks"]) },
+      { q: "How many legs does an insect have?", o: ["6", "4", "8", "2"], e: "All insects, like ants and bees, have 6 legs. A spider has 8 legs, so it is not an insect.", v: C(["🐜", "Ant", "6 legs", 1], ["🐝", "Bee", "6 legs", 1], ["🕷️", "Spider", "8 legs"]) },
+      { q: "What do green plants need to make their food?", o: ["Sunlight", "Darkness", "Plastic", "Sand"], e: "Green leaves use sunlight, water and air to make food for the plant.", v: F(["☀️", "Sunlight", "", 1], ["💧", "Water", ""], ["🌬️", "Air", ""], ["🌿", "Food", "made in leaves"]) },
+      { q: "How often should we brush our teeth?", o: ["Twice a day", "Once a week", "Once a month", "Never"], e: "Brush in the morning after waking up and at night before sleeping. That is twice a day.", v: C(["🌅", "Morning", "brush", 1], ["🌙", "Night", "brush", 1]) },
+      { q: "Which body part helps us to walk?", o: ["Legs", "Ears", "Nose", "Hair"], e: "We use our legs and feet to walk, run and jump.", v: C(["🦵", "Legs", "walk", 1], ["👂", "Ears", "hear"], ["👃", "Nose", "smell"]) },
+      { q: "Which of these is NOT a fruit?", o: ["Carrot", "Mango", "Banana", "Apple"], e: "A carrot is a root we eat, so it is a vegetable. Mango, banana and apple are fruits.", v: C(["🥕", "Carrot", "vegetable", 1], ["🥭", "Mango", "fruit"], ["🍌", "Banana", "fruit"], ["🍎", "Apple", "fruit"]) },
+      { q: "Which animal can fly?", o: ["Eagle", "Elephant", "Snake", "Cow"], e: "An eagle has wings and feathers, so it can fly high in the sky.", v: C(["🦅", "Eagle", "wings", 1], ["🐘", "Elephant", "walks"], ["🐍", "Snake", "crawls"]) },
+    ],
+    ieo: [
+      { q: "What is the plural of \"box\"?", o: ["boxes", "boxs", "boxies", "boxen"], e: "Words ending in x, s, sh or ch add \"es\" to mean more than one. One box, two boxes.", v: F(["📦", "box", "one"], ["📦📦", "boxes", "many", 1]) },
+      { q: "What is the opposite of \"big\"?", o: ["small", "tall", "fat", "long"], e: "Opposites mean very different things. An elephant is big, a mouse is small.", v: C(["🐘", "big", ""], ["🐭", "small", "", 1]) },
+      { q: "Fill in the blank: I ate ___ apple.", o: ["an", "a", "two", "many"], e: "Use \"an\" before a word that starts with a vowel sound: a, e, i, o, u. \"Apple\" starts with a, so we say \"an apple\".", v: { t: "sentence", w: "I ate an apple .", hl: 2, tag: "an + vowel" } },
+      { q: "Which word rhymes with \"cat\"?", o: ["hat", "cup", "dog", "sun"], e: "Rhyming words end with the same sound. c-at and h-at both end in \"at\".", v: C(["🐈", "c-at", ""], ["🎩", "h-at", "", 1]) },
+      { q: "Choose the correct spelling.", o: ["Elephant", "Elefant", "Eliphant", "Elephent"], e: "Elephant is spelt E-L-E-P-H-A-N-T. The \"f\" sound here is written as \"ph\".", v: C(["🐘", "E-L-E-PH-A-N-T", "", 1]) },
+      { q: "Which is a naming word (noun)?", o: ["Ball", "Run", "Happy", "Quickly"], e: "A naming word names a person, animal, place or thing. A ball is a thing, so it is a noun.", v: { t: "sentence", w: "The ball is red .", hl: 1, tag: "noun" } },
+      { q: "The cat is inside the box. The cat is ___ the box.", o: ["in", "on", "under", "behind"], e: "When something is inside, we use \"in\". On top would be \"on\", below would be \"under\".", v: C(["🐈📦", "in", "inside", 1], ["⬆️", "on", "on top"], ["⬇️", "under", "below"]) },
+      { q: "Which letter comes just after \"m\"?", o: ["n", "l", "o", "p"], e: "Say the alphabet: ... k, l, m, n, o ... The letter after m is n.", v: { t: "seq", items: ["k", "l", "m", "n", "o"], hl: 3 } },
+      { q: "Find the action word: \"The boy jumps high.\"", o: ["jumps", "boy", "high", "The"], e: "An action word (verb) tells what someone does. The boy does the jumping, so \"jumps\" is the action word.", v: { t: "sentence", w: "The boy jumps high .", hl: 2, tag: "action" } },
+      { q: "Complete: one foot, two ___.", o: ["feet", "foots", "feets", "footes"], e: "Some words change inside to show more than one. One foot, two feet. One tooth, two teeth.", v: F(["🦶", "foot", "one"], ["🦶🦶", "feet", "two", 1]) },
+      { q: "Which is the odd one out?", o: ["Mango", "Red", "Blue", "Green"], e: "Red, blue and green are colours. Mango is a fruit, so it is the odd one out.", v: C(["🥭", "Mango", "fruit", 1], ["🟥", "Red", "colour"], ["🟦", "Blue", "colour"], ["🟩", "Green", "colour"]) },
+      { q: "Fill in the blank: She ___ a good girl.", o: ["is", "are", "am", "be"], e: "Use \"is\" with he, she and it. Use \"am\" with I, and \"are\" with you, we and they.", v: { t: "sentence", w: "She is a good girl .", hl: 1, tag: "she → is" } },
+      { q: "Which word begins with a vowel?", o: ["Egg", "Ball", "Kite", "Dog"], e: "The vowels are a, e, i, o, u. Egg begins with e, which is a vowel.", v: C(["🥚", "Egg", "e is a vowel", 1], ["🪁", "Kite", "k"], ["🐶", "Dog", "d"]) },
+      { q: "What is the opposite of \"day\"?", o: ["night", "sun", "morning", "light"], e: "Day is when the Sun is up and it is bright. Night is when it is dark.", v: C(["☀️", "day", ""], ["🌙", "night", "", 1]) },
+      { q: "Put the letters in order to make a word: n, u, s", o: ["sun", "nus", "uns", "snu"], e: "s-u-n spells \"sun\", the bright star in the sky.", v: F(["🔤", "n u s", "mixed"], ["☀️", "s u n", "word", 1]) },
+      { q: "What sound does a dog make?", o: ["bark", "moo", "mew", "roar"], e: "A dog barks. A cow moos, a cat mews and a lion roars.", v: C(["🐕", "dog", "bark", 1], ["🐄", "cow", "moo"], ["🐈", "cat", "mew"], ["🦁", "lion", "roar"]) },
+      { q: "Which word is a colour?", o: ["Yellow", "Table", "Jump", "Happy"], e: "Yellow is a colour, like a banana or the Sun.", v: C(["🟨", "Yellow", "colour", 1], ["🪑", "Table", "thing"]) },
+    ],
+  },
+  4: {
+    imo: [
+      { q: "What is the place value of 7 in 47,281?", o: ["7,000", "700", "70,000", "70"], e: "7 sits in the thousands place, so its value is 7 × 1,000 = 7,000.", v: { t: "pv", n: "47281", i: 1 } },
+      { q: "What is 3/4 of 20?", o: ["15", "5", "12", "16"], e: "Split 20 into 4 equal parts. Each part is 5. Three parts make 5 + 5 + 5 = 15.", v: { t: "frac", n: 3, d: 4, total: 20 } },
+      { q: "A rectangle is 8 cm long and 5 cm wide. What is its perimeter?", o: ["26 cm", "40 cm", "13 cm", "21 cm"], e: "Perimeter is the distance all around. Add all four sides: 8 + 5 + 8 + 5 = 26 cm.", v: { t: "rect", w: 8, h: 5 } },
+      { q: "What is the area of a square with side 6 cm?", o: ["36 sq cm", "24 sq cm", "12 sq cm", "30 sq cm"], e: "Area counts the unit squares inside. 6 rows of 6 squares = 6 × 6 = 36 square cm.", v: { t: "rect", w: 6, h: 6, grid: 1 } },
+      { q: "What is 456 × 3?", o: ["1,368", "1,358", "1,268", "1,386"], e: "Break 456 into hundreds, tens and ones, multiply each by 3, then add: 1,200 + 150 + 18 = 1,368.", v: F(["", "400 × 3", "1,200"], ["", "50 × 3", "150"], ["", "6 × 3", "18"], ["", "Total", "1,368", 1]) },
+      { q: "What is 864 ÷ 4?", o: ["216", "214", "226", "206"], e: "Split 864 into 800 + 60 + 4. Divide each part by 4: 200 + 15 + 1 = 216.", v: F(["", "800 ÷ 4", "200"], ["", "60 ÷ 4", "15"], ["", "4 ÷ 4", "1"], ["", "Total", "216", 1]) },
+      { q: "Which number is a factor of 36 but NOT a factor of 24?", o: ["9", "6", "4", "12"], e: "Factors of 36: 1, 2, 3, 4, 6, 9, 12, 18, 36. Factors of 24: 1, 2, 3, 4, 6, 8, 12, 24. Only 9 is in the first list and not the second.", v: { t: "venn", la: "Factors of 36", lb: "Factors of 24", a: ["9", "18", "36"], m: ["1", "2", "3", "4", "6", "12"], b: ["8", "24"], hl: "9" } },
+      { q: "What comes next? 3, 6, 12, 24, __", o: ["48", "36", "30", "42"], e: "Each number is double the one before it. 24 × 2 = 48.", v: { t: "seq", items: ["3", "6", "12", "24", "48"], hl: 4, rule: "×2" } },
+      { q: "What is the Roman numeral XIV in numbers?", o: ["14", "16", "9", "41"], e: "X = 10. IV = 4 (one less than five). So XIV = 10 + 4 = 14.", v: F(["", "X", "10"], ["", "IV", "4"], ["", "XIV", "14", 1]) },
+      { q: "A movie starts at 2:45 pm and lasts 1 hour 30 minutes. When does it end?", o: ["4:15 pm", "3:15 pm", "4:45 pm", "3:45 pm"], e: "Add the hour first: 2:45 → 3:45. Then add 30 minutes: 3:45 → 4:15 pm.", v: F(["🎬", "2:45 pm", "start"], ["", "+1 hour", "3:45 pm"], ["", "+30 min", "4:15 pm", 1]) },
+      { q: "What is 2.5 + 1.75?", o: ["4.25", "3.80", "4.15", "3.25"], e: "Line up the decimal points: 2.50 + 1.75. Hundredths: 0 + 5 = 5. Tenths: 5 + 7 = 12, write 2 carry 1. Ones: 2 + 1 + 1 = 4. Answer 4.25.", v: { t: "sum", rows: ["2.50", "+ 1.75"], ans: "4.25" } },
+      { q: "A shop has 1,250 pens. It sells 487 pens. How many pens are left?", o: ["763", "863", "773", "737"], e: "Subtract 1,250 − 487. You can check by adding back: 763 + 487 = 1,250.", v: { t: "sum", rows: ["1250", "− 487"], ans: "763" } },
+      { q: "Which of these is a right angle?", o: ["90°", "45°", "180°", "120°"], e: "A right angle is a square corner, exactly 90°. The corner of a book is a right angle.", v: { t: "angle", deg: 90 } },
+      { q: "How many lines of symmetry does a square have?", o: ["4", "2", "1", "8"], e: "A square can be folded into matching halves in 4 ways: down the middle, across the middle and along both diagonals.", v: { t: "shape", name: "square", sym: 1 } },
+      { q: "The bar graph shows books read by Tia. How many books did she read in all?", qv: { t: "bars", items: [["Mon", 4], ["Tue", 7], ["Wed", 3], ["Thu", 6]] }, o: ["20", "18", "21", "17"], e: "Read each bar and add: 4 + 7 + 3 + 6 = 20 books.", v: { t: "bars", items: [["Mon", 4], ["Tue", 7], ["Wed", 3], ["Thu", 6]] } },
+      { q: "Round 3,468 to the nearest hundred.", o: ["3,500", "3,400", "3,000", "3,470"], e: "3,468 lies between 3,400 and 3,500. It is past the halfway mark of 3,450, so it rounds up to 3,500.", v: { t: "numline", from: 3400, to: 3500, step: 10, every: 5, mark: 3468 } },
+      { q: "What is the smallest 4-digit number made using 5, 0, 3 and 8 once each?", o: ["3,058", "3,085", "3,508", "5,038"], e: "A 4-digit number cannot start with 0. Put the smallest non-zero digit first (3), then the rest in increasing order: 0, 5, 8. That gives 3,058.", v: { t: "seq", items: ["3", "0", "5", "8"], hl: 0 } },
+      { q: "Which fraction is the biggest?", o: ["3/4", "1/4", "2/4", "1/8"], e: "When the whole is the same, more shaded parts means a bigger fraction. 3 out of 4 equal parts is more than 2 or 1 out of 4, and an eighth is even smaller than a quarter.", v: { t: "frac", n: 3, d: 4 } },
+    ],
+    nso: [
+      { q: "Which teeth are used for tearing food?", o: ["Canines", "Incisors", "Molars", "Milk teeth"], e: "Canines are the sharp, pointed teeth. Incisors cut, canines tear, and molars grind food.", v: C(["🔪", "Incisors", "cut"], ["🦷", "Canines", "tear", 1], ["⚙️", "Molars", "grind"]) },
+      { q: "What is the process by which green plants make their food?", o: ["Photosynthesis", "Respiration", "Digestion", "Evaporation"], e: "Photo means light. Leaves use sunlight, water and carbon dioxide to make food (glucose) and give out oxygen.", v: F(["☀️", "Sunlight", ""], ["💧", "Water + CO₂", ""], ["🍃", "Leaf", "chlorophyll"], ["🍬", "Food + O₂", "", 1]) },
+      { q: "At what temperature does water freeze into ice?", o: ["0 °C", "100 °C", "50 °C", "10 °C"], e: "Water freezes into ice at 0 °C and boils into steam at 100 °C.", v: F(["🧊", "Ice", "0 °C", 1], ["💧", "Water", ""], ["♨️", "Steam", "100 °C"]) },
+      { q: "Which animal is a herbivore?", o: ["Deer", "Lion", "Tiger", "Eagle"], e: "Herbivores eat only plants. A deer eats grass and leaves. Lions, tigers and eagles eat other animals.", v: F(["🌿", "Grass", "producer"], ["🦌", "Deer", "herbivore", 1], ["🦁", "Lion", "carnivore"]) },
+      { q: "Which of these is a natural source of light?", o: ["Sun", "Bulb", "Candle", "Torch"], e: "Natural sources are not made by people. The Sun is natural. Bulbs, candles and torches are made by people.", v: C(["☀️", "Sun", "natural", 1], ["💡", "Bulb", "man-made"], ["🕯️", "Candle", "man-made"]) },
+      { q: "Which planet is closest to the Sun?", o: ["Mercury", "Venus", "Earth", "Mars"], e: "Mercury is the first planet from the Sun. The order is Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, Neptune.", v: { t: "planets", hl: 0 } },
+      { q: "Why can a camel live in the desert?", o: ["It can go many days without water", "It has gills", "It sleeps all winter", "It has thick fur for snow"], e: "A camel stores fat in its hump, drinks a lot of water at once and loses very little. Its wide feet don't sink in sand.", v: C(["🐪", "Camel", "hump stores fat", 1], ["🏜️", "Desert", "hot and dry"]) },
+      { q: "Which of these lets electricity pass through it?", o: ["Copper wire", "Wood", "Rubber", "Plastic"], e: "Metals like copper are good conductors. Wood, rubber and plastic are insulators, so wires are covered in plastic for safety.", v: C(["🔌", "Copper", "conductor", 1], ["🪵", "Wood", "insulator"], ["🧤", "Rubber", "insulator"]) },
+      { q: "Which force pulls everything towards the Earth?", o: ["Gravity", "Friction", "Magnetic force", "Muscular force"], e: "Gravity is the pull of the Earth. That is why a ball thrown up always comes back down.", v: F(["🍎", "Apple", "falls"], ["⬇️", "Gravity", "pulls down", 1], ["🌍", "Earth", ""]) },
+      { q: "Which animal starts life as a tadpole?", o: ["Frog", "Fish", "Snake", "Lizard"], e: "A frog lays eggs in water. Eggs hatch into tadpoles, which grow legs and become frogs.", v: F(["🥚", "Eggs", ""], ["〰️", "Tadpole", ""], ["🐸", "Frog", "", 1]) },
+      { q: "Our skin makes which vitamin in sunlight?", o: ["Vitamin D", "Vitamin C", "Vitamin A", "Vitamin K"], e: "Morning sunlight helps our skin make vitamin D, which keeps bones strong.", v: F(["☀️", "Sunlight", ""], ["🧍", "Skin", ""], ["🦴", "Vitamin D", "strong bones", 1]) },
+      { q: "Which state of matter has a fixed shape?", o: ["Solid", "Liquid", "Gas", "None of these"], k: 1, e: "Solids keep their shape. Liquids take the shape of their container, and gases spread out to fill any space.", v: C(["🧊", "Solid", "fixed shape", 1], ["💧", "Liquid", "takes container's shape"], ["💨", "Gas", "fills all space"]) },
+      { q: "Which plant eats insects?", o: ["Pitcher plant", "Mango tree", "Rose", "Cactus"], e: "The pitcher plant traps insects in its jug-shaped leaf and digests them to get nutrients.", v: F(["🐞", "Insect", "falls in"], ["🫙", "Pitcher plant", "traps it", 1]) },
+      { q: "A seesaw is an example of which simple machine?", o: ["Lever", "Pulley", "Screw", "Wedge"], e: "A seesaw is a plank resting on a point called the fulcrum. A bar that turns on a fulcrum is a lever.", v: { t: "lever" } },
+      { q: "Which organ pumps blood around the body?", o: ["Heart", "Lungs", "Liver", "Kidney"], e: "The heart is a strong muscle that pumps blood all day. Lungs help us breathe, and kidneys clean the blood.", v: C(["❤️", "Heart", "pumps blood", 1], ["🫁", "Lungs", "breathing"], ["🧠", "Brain", "thinking"]) },
+      { q: "Cotton clothes are best to wear in ___.", o: ["Summer", "Winter", "Snowfall", "Cold nights"], e: "Cotton soaks up sweat and lets air pass, which keeps us cool. Woollen clothes keep us warm in winter.", v: C(["👕", "Cotton", "summer", 1], ["🧶", "Wool", "winter"]) },
+      { q: "Why does the Moon shine at night?", o: ["It reflects sunlight", "It has its own light", "It is on fire", "It is made of glass"], e: "The Moon has no light of its own. Sunlight falls on it and bounces back to Earth.", v: F(["☀️", "Sun", "gives light"], ["🌕", "Moon", "reflects", 1], ["🌍", "Earth", "we see it"]) },
+    ],
+    ieo: [
+      { q: "What is the past tense of \"run\"?", o: ["ran", "runned", "running", "runs"], e: "\"Run\" is an irregular verb. Today I run, yesterday I ran.", v: F(["", "Today", "run"], ["", "Yesterday", "ran", 1]) },
+      { q: "Choose the word that means the same as \"huge\".", o: ["enormous", "tiny", "weak", "thin"], e: "Words with the same meaning are synonyms. Huge and enormous both mean very big.", v: C(["🐋", "huge", ""], ["🐋", "enormous", "same meaning", 1]) },
+      { q: "Choose the opposite of \"brave\".", o: ["cowardly", "bold", "strong", "fearless"], e: "Bold and fearless mean almost the same as brave. The opposite (antonym) is cowardly.", v: C(["🦁", "brave", ""], ["🐭", "cowardly", "opposite", 1]) },
+      { q: "Find the adverb: \"She sang beautifully.\"", o: ["beautifully", "sang", "She", "None of these"], k: 1, e: "An adverb tells how an action is done. How did she sing? Beautifully. Many adverbs end in \"-ly\".", v: { t: "sentence", w: "She sang beautifully .", hl: 2, tag: "how?" } },
+      { q: "Fill in the collective noun: a ___ of fish", o: ["school", "herd", "flock", "pack"], e: "Groups have special names. A school of fish, a herd of cows, a flock of sheep, a pack of wolves.", v: C(["🐟", "school", "fish", 1], ["🐄", "herd", "cows"], ["🐑", "flock", "sheep"], ["🐺", "pack", "wolves"]) },
+      { q: "Which sentence is punctuated correctly?", o: ["Where are you going?", "Where are you going.", "where are you going?", "Where are you going!"], e: "A question starts with a capital letter and ends with a question mark.", v: { t: "sentence", w: "Where are you going ?", hl: 4, tag: "question mark" } },
+      { q: "What does the idiom \"a piece of cake\" mean?", o: ["Very easy", "Very tasty", "A small part", "A birthday treat"], e: "An idiom means something different from its words. \"The test was a piece of cake\" means the test was very easy.", v: F(["🍰", "a piece of cake", ""], ["😌", "very easy", "", 1]) },
+      { q: "Fill in the blank: He has been ill ___ Monday.", o: ["since", "for", "from", "by"], e: "Use \"since\" with a starting point in time (since Monday). Use \"for\" with a length of time (for three days).", v: C(["📅", "since", "Monday, 2015", 1], ["⏳", "for", "3 days, 2 hours"]) },
+      { q: "Fill in the blank: I was hungry, ___ I ate a sandwich.", o: ["so", "but", "or", "because"], e: "\"So\" joins a reason to its result. Being hungry is the reason, eating is the result.", v: { t: "sentence", w: "I was hungry , so I ate a sandwich .", hl: 4, tag: "result" } },
+      { q: "Which word is spelt correctly?", o: ["Necessary", "Neccessary", "Necessery", "Nesessary"], e: "Necessary has one c and two s. A trick: a shirt has one collar and two sleeves.", v: C(["👔", "ne-C-e-SS-ary", "1 c, 2 s", 1]) },
+      { q: "What is the plural of \"mouse\"?", o: ["mice", "mouses", "mices", "meese"], e: "Mouse changes its vowels to make the plural: one mouse, two mice.", v: F(["🐭", "mouse", "one"], ["🐭🐭", "mice", "many", 1]) },
+      { q: "Fill in the blank: This box is ___ than that one.", o: ["heavier", "heavy", "heaviest", "more heavy"], e: "When we compare two things we use the -er form. heavy → heavier (comparing 2) → heaviest (comparing 3 or more).", v: F(["", "heavy", ""], ["", "heavier", "2 things", 1], ["", "heaviest", "3 or more"]) },
+      { q: "Which of these is a proper noun?", o: ["Delhi", "city", "river", "school"], e: "A proper noun is the special name of one person, place or thing and starts with a capital letter. Delhi is the name of a city.", v: C(["🏙️", "city", "common"], ["📍", "Delhi", "proper", 1]) },
+      { q: "What is the feminine of \"lion\"?", o: ["lioness", "lionet", "she-lion", "lionie"], e: "Many animal words add \"-ess\" for the female: lion → lioness, tiger → tigress.", v: F(["🦁", "lion", "male"], ["🦁", "lioness", "female", 1]) },
+      { q: "Fill in the blank: My father ___ to the office every day.", o: ["goes", "go", "going", "gone"], e: "For a habit with he, she or one person, add -s or -es to the verb: he goes, she reads.", v: { t: "sentence", w: "My father goes to the office every day .", hl: 2, tag: "he/she → goes" } },
+      { q: "What is the opposite of \"ancient\"?", o: ["modern", "old", "antique", "historic"], e: "Ancient means very old. Old, antique and historic are similar words. The opposite is modern, meaning new.", v: C(["🏛️", "ancient", "very old"], ["🏙️", "modern", "new", 1]) },
+      { q: "Choose the correct word: The children ___ playing in the park.", o: ["are", "is", "was", "has"], e: "\"Children\" means more than one child, so we use \"are\".", v: { t: "sentence", w: "The children are playing in the park .", hl: 2, tag: "many → are" } },
+    ],
+  },
+};
+
+</script>
+<script>
+const SUBJ = [
+  { key: "imo", code: "IMO", name: "Maths" },
+  { key: "nso", code: "NSO", name: "Science" },
+  { key: "ieo", code: "IEO", name: "English" },
+];
+const NAMES = { 1: "Myra", 4: "Reyhaan" };
+const SECTION_MS = 20 * 60 * 1000, PER_SECTION = 10;
+const app = document.getElementById("app"), strip = document.getElementById("strip");
+let S = null, timer = null;
+
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const fmt = v => Number(v).toLocaleString("en-IN");
+const mmss = ms => { ms = Math.max(0, ms); const t = Math.ceil(ms / 1000); const h = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60), s = t % 60; return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(s).padStart(2, "0"); };
+
+// ---------- visuals ----------
+const svg = (w, h, inner) => `<svg class="viz" viewBox="0 0 ${w} ${h}" style="max-width:${Math.round(w * 1.25)}px" aria-hidden="true">${inner}</svg>`;
+const T = (x, y, s, cls = "t") => `<text x="${x}" y="${y}" class="${cls}">${esc(s)}</text>`;
+const E = (x, y, e, size = 18) => `<text x="${x}" y="${y}" font-size="${size}">${e}</text>`;
+const icons = (n, e, x0, y0, per, g) => { let o = ""; for (let k = 0; k < n; k++) o += E(x0 + (k % per) * g + g / 2, y0 + Math.floor(k / per) * g + g / 2, e); return o; };
+
+const VIZ = {
+  add({ a, b, i }) {
+    const per = 5, g = 27, bw = per * g + 12, rows = Math.ceil(Math.max(a, b) / per), bh = rows * g + 12, h = bh + 30, x2 = bw + 36, x3 = x2 + bw + 36;
+    return svg(x3 + 56, h,
+      `<rect x="0" y="4" width="${bw}" height="${bh}" rx="10" class="box"/>` + icons(a, i, 6, 10, per, g) + T(bw / 2, bh + 20, a, "cap") +
+      T(bw + 18, bh / 2 + 4, "+", "op") +
+      `<rect x="${x2}" y="4" width="${bw}" height="${bh}" rx="10" class="box"/>` + icons(b, i, x2 + 6, 10, per, g) + T(x2 + bw / 2, bh + 20, b, "cap") +
+      T(x2 + bw + 18, bh / 2 + 4, "=", "op") + `<circle cx="${x3 + 28}" cy="${bh / 2 + 4}" r="26" class="ans"/>` + T(x3 + 28, bh / 2 + 4, a + b, "ansT"));
+  },
+  sub({ a, b, i }) {
+    const per = 5, g = 28, rows = Math.ceil(a / per), bw = per * g + 12, bh = rows * g + 12, h = bh + 30, cy = bh / 2 + 4;
+    let o = `<rect x="0" y="4" width="${bw}" height="${bh}" rx="10" class="box"/>`;
+    for (let k = 0; k < a; k++) {
+      const x = 6 + (k % per) * g + g / 2, y = 10 + Math.floor(k / per) * g + g / 2, gone = k >= a - b;
+      o += `<g opacity="${gone ? .35 : 1}">${E(x, y, i)}</g>` + (gone ? `<line x1="${x - 11}" y1="${y - 11}" x2="${x + 11}" y2="${y + 11}" class="cross"/>` : "");
+    }
+    o += T(bw / 2, bh + 20, `${a} take away ${b}`, "cap") + T(bw + 22, cy, "=", "op") + `<circle cx="${bw + 72}" cy="${cy}" r="26" class="ans"/>` + T(bw + 72, cy, a - b, "ansT");
+    return svg(bw + 104, h, o);
+  },
+  array({ r, c, i, cap }) {
+    const g = 30, w = c * g + 12, h = r * g + 40; let o = "";
+    for (let y = 0; y < r; y++) {
+      o += `<rect x="0" y="${4 + y * g}" width="${w}" height="${g - 4}" rx="8" class="box"/>`;
+      for (let x = 0; x < c; x++) o += E(6 + x * g + g / 2, 4 + y * g + (g - 4) / 2, i, 18);
+      o += T(w + 20, 4 + y * g + (g - 4) / 2, c, "cap");
+    }
+    return svg(w + 40, h, o + T((w + 40) / 2, h - 12, cap || `${r} groups of ${c} = ${r * c}`, "big"));
+  },
+  numline(p) {
+    const { from, to } = p, step = p.step || 1, W = 380, pad = 24, y = 74, X = v => pad + (v - from) / (to - from) * (W - 2 * pad);
+    const n = Math.round((to - from) / step), every = p.every || (n > 12 ? Math.ceil(n / 10) : 1);
+    let o = `<line x1="${pad - 10}" y1="${y}" x2="${W - pad + 10}" y2="${y}" class="axis"/>`;
+    for (let k = 0; k <= n; k++) { const v = from + k * step, x = X(v); o += `<line x1="${x}" y1="${y - 6}" x2="${x}" y2="${y + 6}" class="axis"/>` + (k % every === 0 ? T(x, y + 20, fmt(v), "tick") : ""); }
+    let cur = p.start;
+    if (cur != null) {
+      (p.jumps || []).forEach(j => {
+        const x1 = X(cur), x2 = X(cur + j), mx = (x1 + x2) / 2, hg = Math.min(44, Math.abs(x2 - x1) / 2 + 12);
+        o += `<path d="M${x1} ${y - 5} Q${mx} ${y - 5 - hg * 2} ${x2} ${y - 5}" class="jump"/>` + T(mx, y - 16 - hg, (j > 0 ? "+" : "−") + fmt(Math.abs(j)), "jl");
+        cur += j;
+      });
+      o += `<circle cx="${X(p.start)}" cy="${y}" r="6" class="startdot"/>`;
+    }
+    const m = p.mark ?? cur;
+    o += `<circle cx="${X(m)}" cy="${y}" r="9" class="markdot"/>` + T(X(m), y + 42, fmt(m), "big");
+    return svg(W, y + 56, o);
+  },
+  seq(p) {
+    const n = p.items.length, bw = 54, gap = 22, W = n * bw + (n - 1) * gap, top = p.rule ? 34 : 4; let o = "";
+    p.items.forEach((s, k) => {
+      const x = k * (bw + gap), on = k === p.hl;
+      o += `<rect x="${x}" y="${top}" width="${bw}" height="46" rx="10" class="${on ? "ans" : "box"}"/>` + T(x + bw / 2, top + 23, s, on ? "ansT" : "big");
+      if (p.rule && k < n - 1) { const a = x + bw / 2 + 6, b = x + bw + gap + bw / 2 - 6; o += `<path d="M${a} ${top - 2} Q${(a + b) / 2} ${top - 30} ${b} ${top - 2}" class="jump"/>` + T((a + b) / 2, top - 24, p.rule, "jl"); }
+    });
+    return svg(W, top + 52, o);
+  },
+  clock({ h, m }) {
+    const c = 82, r = 70; let o = `<circle cx="${c}" cy="${c}" r="${r}" class="face"/>`;
+    for (let k = 1; k <= 12; k++) { const a = k * Math.PI / 6; o += T(c + Math.sin(a) * (r - 15), c - Math.cos(a) * (r - 15), k, "big"); }
+    const ha = ((h % 12) + m / 60) * Math.PI / 6, ma = m * Math.PI / 30;
+    o += `<line x1="${c}" y1="${c}" x2="${c + Math.sin(ha) * 34}" y2="${c - Math.cos(ha) * 34}" class="hand h"/><line x1="${c}" y1="${c}" x2="${c + Math.sin(ma) * 52}" y2="${c - Math.cos(ma) * 52}" class="hand m"/><circle cx="${c}" cy="${c}" r="5" class="pin"/>`;
+    return svg(164, 164, o);
+  },
+  place({ n }) {
+    const t = Math.floor(n / 10), u = n % 10, s = 11; let o = "";
+    for (let k = 0; k < t; k++) for (let j = 0; j < 10; j++) o += `<rect x="${k * (s + 9)}" y="${j * s}" width="${s}" height="${s}" class="ten"/>`;
+    const ox = t * (s + 9) + 24;
+    for (let k = 0; k < u; k++) o += `<rect x="${ox + (k % 5) * (s + 5)}" y="${74 + Math.floor(k / 5) * (s + 5)}" width="${s}" height="${s}" class="one"/>`;
+    return svg(ox + 84, 134, o + T(t * (s + 9) / 2 - 4, 126, `${t} tens`, "big") + T(ox + 36, 126, `${u} ones`, "big"));
+  },
+  pv({ n, i }) {
+    const L = ["L", "TTh", "Th", "H", "T", "O"].slice(-n.length), cw = 56, W = n.length * cw, p = n.length - 1 - i, val = Number(n[i]) * 10 ** p; let o = "";
+    [...n].forEach((d, k) => {
+      const x = k * cw, on = k === i;
+      o += `<rect x="${x + 3}" y="2" width="${cw - 6}" height="24" rx="6" class="box"/>` + T(x + cw / 2, 14, L[k], "cap") +
+        `<rect x="${x + 3}" y="32" width="${cw - 6}" height="46" rx="8" class="${on ? "ans" : "box"}"/>` + T(x + cw / 2, 55, d, on ? "ansT" : "big");
+    });
+    return svg(W, 108, o + T(W / 2, 98, `${n[i]} × ${fmt(10 ** p)} = ${fmt(val)}`, "big"));
+  },
+  frac({ n, d, total }) {
+    const W = 320, pw = W / d; let o = "";
+    for (let k = 0; k < d; k++) o += `<rect x="${k * pw + 2}" y="4" width="${pw - 4}" height="48" rx="8" class="${k < n ? "ans" : "box"}"/>` + T(k * pw + pw / 2, 28, total ? total / d : `1/${d}`, k < n ? "ansT" : "big");
+    return svg(W, 84, o + T(W / 2, 72, total ? `${n} parts of ${total / d} = ${n * total / d}` : `${n} of ${d} equal parts shaded = ${n}/${d}`, "big"));
+  },
+  rect({ w, h, grid, unit = "cm" }) {
+    const s = Math.min(240 / w, 150 / h), W = w * s, H = h * s, ox = 46, oy = 22; let o = "";
+    if (grid) for (let x = 0; x < w; x++) for (let y = 0; y < h; y++) o += `<rect x="${ox + x * s}" y="${oy + y * s}" width="${s}" height="${s}" class="cell"/>`;
+    o += `<rect x="${ox}" y="${oy}" width="${W}" height="${H}" class="outline"/>` +
+      T(ox + W / 2, oy - 11, `${w} ${unit}`, "cap") + T(ox + W / 2, oy + H + 14, `${w} ${unit}`, "cap") + T(ox - 22, oy + H / 2, `${h} ${unit}`, "cap") + T(ox + W + 24, oy + H / 2, `${h} ${unit}`, "cap");
+    return svg(ox * 2 + W, oy + H + 30, o);
+  },
+  shape({ name, sym }) {
+    let pts = name === "triangle" ? [[90, 14], [166, 146], [14, 146]] : [[20, 10], [160, 10], [160, 150], [20, 150]];
+    let o = `<polygon points="${pts.map(p => p.join(",")).join(" ")}" class="shp"/>`;
+    if (sym) o += `<line x1="90" y1="0" x2="90" y2="160" class="symm"/><line x1="10" y1="80" x2="170" y2="80" class="symm"/><line x1="10" y1="0" x2="170" y2="160" class="symm"/><line x1="170" y1="0" x2="10" y2="160" class="symm"/>`;
+    else {
+      pts.forEach(([x, y], k) => o += `<circle cx="${x}" cy="${y}" r="8" class="corner"/>`);
+      pts.forEach(([x, y], k) => { const [a, b] = pts[(k + 1) % pts.length], mx = (x + a) / 2, my = (y + b) / 2, cx = 90, cy = 90; const dx = mx - cx, dy = my - cy, l = Math.hypot(dx, dy); o += T(mx + dx / l * 16, my + dy / l * 16, k + 1, "jl"); });
+    }
+    return svg(180, 162, o);
+  },
+  angle({ deg }) {
+    const cx = 30, cy = 130, L = 120, a = deg * Math.PI / 180;
+    let o = `<line x1="${cx}" y1="${cy}" x2="${cx + L}" y2="${cy}" class="ray"/><line x1="${cx}" y1="${cy}" x2="${cx + L * Math.cos(a)}" y2="${cy - L * Math.sin(a)}" class="ray"/>`;
+    o += deg === 90 ? `<path d="M${cx + 20} ${cy} V${cy - 20} H${cx}" class="arc"/>` : `<path d="M${cx + 30} ${cy} A30 30 0 0 0 ${cx + 30 * Math.cos(a)} ${cy - 30 * Math.sin(a)}" class="arc"/>`;
+    return svg(170, 140, o + T(cx + 62, cy - 42, deg + "°", "big"));
+  },
+  bars({ items, hl }) {
+    const max = Math.max(...items.map(i => i[1])), bw = 44, gap = 20, H = 120, W = items.length * (bw + gap); let o = `<line x1="0" y1="${H + 12}" x2="${W}" y2="${H + 12}" class="axis"/>`;
+    items.forEach(([l, v], k) => { const x = k * (bw + gap) + gap / 2, h = v / max * H * .85; o += `<rect x="${x}" y="${H + 12 - h}" width="${bw}" height="${h}" rx="4" class="${k === hl ? "ans" : "bar"}"/>` + T(x + bw / 2, H + 2 - h, v, "big") + T(x + bw / 2, H + 26, l, "cap"); });
+    return svg(W, H + 36, o);
+  },
+  venn(p) {
+    let o = `<circle cx="120" cy="96" r="78" class="setA"/><circle cx="220" cy="96" r="78" class="setB"/>` + T(96, 8, p.la, "cap") + T(244, 8, p.lb, "cap");
+    const col = (arr, x0) => arr.map((v, k) => { let x = x0, y = 96 + (k - (arr.length - 1) / 2) * 22; if (arr.length > 4) { const c = k % 2, rr = Math.floor(k / 2), nr = Math.ceil(arr.length / 2); x = x - 13 + c * 26; y = 96 + (rr - (nr - 1) / 2) * 24; } return (v === p.hl ? `<circle cx="${x}" cy="${y}" r="12" class="ans"/>` : "") + T(x, y, v, v === p.hl ? "ansT sm" : "big"); }).join("");
+    return svg(340, 178, o + col(p.a, 82) + col(p.m, 170) + col(p.b, 258));
+  },
+  planets({ hl }) {
+    const P = [["Mercury", 5], ["Venus", 8], ["Earth", 8], ["Mars", 6], ["Jupiter", 17], ["Saturn", 14], ["Uranus", 10], ["Neptune", 10]];
+    let o = `<circle cx="26" cy="60" r="26" class="sun"/>` + T(26, 60, "Sun", "big");
+    P.forEach(([n, r], k) => { const x = 82 + k * 44; o += `<circle cx="${x}" cy="60" r="${r}" class="pl${k === hl ? " on" : ""}"/>` + T(x, k % 2 ? 98 : 22, n, k === hl ? "jl" : "tick"); });
+    return svg(414, 112, o);
+  },
+  plant({ hl }) {
+    let o = `<rect x="0" y="118" width="250" height="56" rx="6" class="soil"/><path d="M100 120 L100 40" class="stem"/>` +
+      `<ellipse cx="80" cy="86" rx="21" ry="9" transform="rotate(-25 80 86)" class="leaf"/><ellipse cx="120" cy="70" rx="21" ry="9" transform="rotate(25 120 70)" class="leaf"/>`;
+    for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3; o += `<circle cx="${100 + Math.cos(a) * 11}" cy="${32 + Math.sin(a) * 11}" r="8" class="petal"/>`; }
+    o += `<circle cx="100" cy="32" r="6" class="core"/><path d="M100 120 L84 150 M100 120 L100 162 M100 120 L118 148 M91 137 L78 141 M109 134 L124 132" class="root"/>`;
+    [["flower", 32, 114], ["leaf", 70, 140], ["stem", 104, 103], ["root", 150, 120]].forEach(([n, y, x1]) => { const on = n === hl; o += `<line x1="${x1}" y1="${y}" x2="174" y2="${y}" class="lead"/><rect x="176" y="${y - 12}" width="68" height="24" rx="12" class="${on ? "ans" : "box"}"/>` + T(210, y, n, on ? "ansT sm" : "cap"); });
+    return svg(250, 176, o);
+  },
+  lever() {
+    return svg(300, 140, `<polygon points="150,80 128,124 172,124" class="fulcrum"/><rect x="20" y="66" width="260" height="12" rx="4" class="plank" transform="rotate(-10 150 72)"/>` +
+      E(44, 74, "🧒", 34) + E(256, 28, "👧", 34) + T(150, 134, "fulcrum (turning point)", "cap"));
+  },
+  sum({ rows, ans }) {
+    const x = 150; let o = rows.map((r, k) => T(x, 22 + k * 32, r, "mono")).join("");
+    const y = 22 + rows.length * 32 - 12;
+    return svg(170, y + 50, o + `<line x1="40" y1="${y}" x2="${x + 4}" y2="${y}" class="sumline"/><rect x="50" y="${y + 6}" width="${x - 44}" height="34" rx="8" class="ans"/>` + T(x, y + 23, ans, "mono ansT"));
+  },
+  cards({ items, arrow }) {
+    return `<div class="cards">` + items.map(([e, t, s, ok], k) => (arrow && k ? `<span class="arr" aria-hidden="true">→</span>` : "") +
+      `<div class="cd${ok ? " ok" : ""}">${e ? `<span class="e">${e}</span>` : ""}<span class="tt">${esc(t)}</span>${s ? `<span class="ss">${esc(s)}</span>` : ""}</div>`).join("") + `</div>`;
+  },
+  sentence({ w, hl, tag }) {
+    return `<div class="sent">` + w.split(" ").map((x, k) => `<span class="w${k === hl ? " on" : ""}"><b>${esc(x)}</b>${k === hl ? `<small>${esc(tag)}</small>` : ""}</span>`).join("") + `</div>`;
+  },
+};
+const viz = v => v ? `<div class="vizbox">${VIZ[v.t](v)}</div>` : "";
+
+// ---------- flow ----------
+function start() {
+  clearInterval(timer); strip.hidden = true; document.body.dataset.subj = "imo";
+  app.innerHTML = `
+  <section class="hero">
+    <span class="eyebrow">Olympiad practice · IMO · NSO · IEO</span>
+    <h1>Which grade are you practising today?</h1>
+    <p>Pick your grade to begin. You will get 10 fresh questions in each subject, with a picture explanation after every answer.</p>
+  </section>
+  <div class="grades">
+    <button class="grade" id="g1" data-g="1"><span class="num">1</span><span class="lbl">Grade 1</span><span class="sub">Counting, shapes, plants, animals and first words</span></button>
+    <button class="grade" id="g4" data-g="4"><span class="num">4</span><span class="lbl">Grade 4</span><span class="sub">Fractions, area, the solar system, tenses and idioms</span></button>
+  </div>
+  <div class="plan">
+    <div style="--c:var(--imo)"><b>IMO · Maths</b><span>10 questions · 20 minutes</span></div>
+    <div style="--c:var(--nso)"><b>NSO · Science</b><span>10 questions · 20 minutes</span></div>
+    <div style="--c:var(--ieo)"><b>IEO · English</b><span>10 questions · 20 minutes</span></div>
+  </div>`;
+  app.querySelectorAll(".grade").forEach(b => b.onclick = () => greet(+b.dataset.g));
+}
+
+function greet(g) {
+  S = { grade: g, cur: 0, sections: SUBJ.map(s => ({ ...s, qs: shuffle(BANK[g][s.key]).slice(0, PER_SECTION).map(q => ({ ...q, opts: q.k ? q.o.slice() : shuffle(q.o) })), idx: 0, res: [], endAt: 0, done: false, timeUp: false })) };
+  app.innerHTML = `
+  <section class="greet">
+    <h1>Hello ${NAMES[g]} <span aria-hidden="true">👋</span></h1>
+    <p>Ready for today's Grade ${g} Olympiad practice? Here is how it works.</p>
+    <ul class="rules">
+      <li>3 subjects in a row: Maths, then Science, then English.</li>
+      <li>Each subject has 10 questions and its own 20-minute clock. The whole test is 1 hour.</li>
+      <li>Tap an answer. You will see if it is right, with a picture that explains why.</li>
+    </ul>
+    <button class="btn" id="go">Start Maths</button>
+  </section>`;
+  document.getElementById("go").onclick = () => beginSection(0);
+}
+
+function beginSection(i) {
+  S.cur = i; const sec = S.sections[i];
+  sec.endAt = Date.now() + SECTION_MS; document.body.dataset.subj = sec.key;
+  strip.hidden = false; clearInterval(timer); timer = setInterval(tick, 500);
+  renderQ(); tick(); window.scrollTo(0, 0);
+}
+
+function remaining() { const sec = S.sections[S.cur]; return sec.done ? 0 : sec.endAt - Date.now(); }
+
+function tick() {
+  if (!S) return;
+  const sec = S.sections[S.cur], left = remaining(), future = S.sections.filter((s, k) => k > S.cur).length * SECTION_MS, total = left + future;
+  strip.innerHTML = `<div class="in">
+    <div class="tabs">${S.sections.map((s, k) => `<span class="tab ${k === S.cur && !s.done ? "on" : s.done ? "done" : ""}">${s.code} ${s.done ? "✓" : ""}</span>`).join("")}</div>
+    <div class="clocks"><div class="clk ${left < 120000 && !sec.done ? "warn" : ""}"><small>${sec.name} left</small><b>${mmss(left)}</b></div><div class="clk"><small>Total left</small><b>${mmss(total)}</b></div></div></div>`;
+  if (!sec.done && left <= 0) { sec.timeUp = true; endSection(); }
+}
+
+function renderQ() {
+  const sec = S.sections[S.cur], q = sec.qs[sec.idx];
+  app.innerHTML = `
+  <div class="qhead"><span class="subj">${sec.code} · ${sec.name}</span><span class="count">Question ${sec.idx + 1} of ${sec.qs.length}</span></div>
+  <div class="dots">${sec.qs.map((_, k) => `<i class="${k < sec.res.length ? (sec.res[k] ? "ok" : "bad") : k === sec.idx ? "cur" : ""}"></i>`).join("")}</div>
+  <article class="qcard">
+    <p class="qtext">${esc(q.q)}</p>
+    ${viz(q.qv)}
+    <div class="opts">${q.opts.map((o, k) => `<button class="opt" id="opt${k}" data-k="${k}"><span class="k">${"ABCD"[k]}</span><span>${esc(o)}</span></button>`).join("")}</div>
+    <div id="fb"></div>
+  </article>`;
+  app.querySelectorAll(".opt").forEach(b => b.onclick = () => answer(+b.dataset.k));
+}
+
+function answer(k) {
+  const sec = S.sections[S.cur], q = sec.qs[sec.idx];
+  if (sec.res.length > sec.idx || sec.done) return;
+  const correct = q.opts[k] === q.o[0]; sec.res.push(correct);
+  app.querySelectorAll(".opt").forEach((b, j) => { b.disabled = true; if (q.opts[j] === q.o[0]) b.classList.add("right"); else if (j === k) b.classList.add("wrong"); else b.classList.add("dim"); });
+  const last = sec.idx === sec.qs.length - 1;
+  document.getElementById("fb").innerHTML = `
+    <div class="explain ${correct ? "ok" : "bad"}" role="status">
+      <span class="verdict">${correct ? "Correct, well done!" : "Not quite."}</span>
+      <p>${correct ? "" : `The right answer is <b>${esc(q.o[0])}</b>. `}${esc(q.e)}</p>
+      ${viz(q.v)}
+    </div>
+    <div class="nav"><button class="btn" id="next">${last ? `Finish ${sec.name}` : "Next question"}</button></div>`;
+  document.querySelector(".dots").children[sec.idx].className = correct ? "ok" : "bad";
+  const nx = document.getElementById("next"); nx.onclick = () => { if (last) endSection(); else { sec.idx++; renderQ(); window.scrollTo(0, 0); } };
+  nx.focus({ preventScroll: true });
+  document.getElementById("fb").scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function endSection() {
+  const sec = S.sections[S.cur]; if (sec.done) return;
+  sec.done = true; tick();
+  const score = sec.res.filter(Boolean).length, next = S.sections[S.cur + 1];
+  const unanswered = sec.qs.length - sec.res.length;
+  if (!next) return results();
+  app.innerHTML = `
+  <section class="panel">
+    <span class="eyebrow">${sec.code} · ${sec.name} finished${sec.timeUp ? " (time's up)" : ""}</span>
+    <div class="score">${score}<small> / ${sec.qs.length}</small></div>
+    <p class="muted">${unanswered ? `${unanswered} question${unanswered > 1 ? "s were" : " was"} left unanswered. ` : ""}${score >= 8 ? "Brilliant work, " : score >= 5 ? "Good going, " : "Keep practising, "}${NAMES[S.grade]}! Next up is ${next.name}, with a fresh 20-minute clock.</p>
+    <button class="btn" id="go" style="--acc:var(--${next.key})">Start ${next.name}</button>
+  </section>`;
+  document.getElementById("go").onclick = () => beginSection(S.cur + 1);
+}
+
+function results() {
+  clearInterval(timer); strip.hidden = true;
+  const total = S.sections.reduce((a, s) => a + s.res.filter(Boolean).length, 0), max = S.sections.length * PER_SECTION;
+  const pct = total / max;
+  app.innerHTML = `
+  <section class="panel">
+    <span class="eyebrow">Grade ${S.grade} practice complete</span>
+    <h2>${pct >= .8 ? "Superstar" : pct >= .5 ? "Great effort" : "Nice try"}, ${NAMES[S.grade]}!</h2>
+    <div class="score">${total}<small> / ${max}</small></div>
+    <div class="rows">${S.sections.map(s => { const sc = s.res.filter(Boolean).length; return `<div class="row"><span class="nm">${s.code} · ${s.name}</span><b>${sc} / ${s.qs.length}</b><span class="meter"><i style="width:${sc / s.qs.length * 100}%;background:var(--${s.key})"></i></span></div>`; }).join("")}</div>
+    <p class="muted">Every new attempt picks a different set of questions.</p>
+    <div class="btns"><button class="btn" id="again">Practise again with new questions</button><button class="btn ghost" id="home">Choose another grade</button></div>
+  </section>`;
+  document.getElementById("again").onclick = () => greet(S.grade);
+  document.getElementById("home").onclick = () => { S = null; start(); };
+}
+
+document.addEventListener("keydown", e => {
+  if (!S || strip.hidden) return;
+  const i = "1234abcd".indexOf(e.key.toLowerCase()); if (i < 0) return;
+  const b = document.getElementById("opt" + (i % 4)); if (b && !b.disabled) b.click();
+});
+start();
+</script>

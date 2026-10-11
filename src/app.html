@@ -1,0 +1,484 @@
+<title>Olympiad Practice Desk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Grandstander:wght@600;800&family=Lexend:wght@400;500;600&display=swap">
+<style>
+/* Layout: one exercise-book column on graph paper; a sticky timer strip on top, each subject tinted by its own ink. */
+:root {
+  --paper: #f5f7fc; --grid: #e3e8f4; --card: #ffffff; --ink: #1d2240; --muted: #5b6288; --line: #d6dcec;
+  --imo: #d9532c; --nso: #16936a; --ieo: #6a4fd6;
+  --ok: #158a52; --okbg: #e3f5ea; --bad: #cc3434; --badbg: #fbe7e7; --hl: #ffd84d; --hlink: #3d2f00;
+  --acc: var(--imo);
+  --f-display: "Grandstander", "Comic Sans MS", "Trebuchet MS", system-ui, sans-serif;
+  --f-body: "Lexend", "Segoe UI", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #121528; --grid: #1b2038; --card: #1a1f37; --ink: #edf0fb; --muted: #a2a8c8; --line: #2c3253;
+  --imo: #ff7b55; --nso: #3ccb93; --ieo: #a08bff; --ok: #4fd18c; --okbg: #163627; --bad: #ff7070; --badbg: #3d1b22; --hl: #e8b923; --hlink: #1d1600;
+  color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --paper: #121528; --grid: #1b2038; --card: #1a1f37; --ink: #edf0fb; --muted: #a2a8c8; --line: #2c3253;
+  --imo: #ff7b55; --nso: #3ccb93; --ieo: #a08bff; --ok: #4fd18c; --okbg: #163627; --bad: #ff7070; --badbg: #3d1b22; --hl: #e8b923; --hlink: #1d1600;
+  color-scheme: dark; }
+body[data-subj="nso"] { --acc: var(--nso); } body[data-subj="ieo"] { --acc: var(--ieo); }
+
+* { box-sizing: border-box; }
+body {
+  background-color: var(--paper); color: var(--ink); font-family: var(--f-body); font-size: 16px; line-height: 1.5;
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 24px 24px; min-height: 100vh;
+}
+.wrap { max-width: 760px; margin: 0 auto; padding-inline: 16px; padding-block: 20px 48px; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; line-height: 1.15; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible { outline: 3px solid var(--acc); outline-offset: 3px; }
+.btn { background: var(--acc); color: #fff; border: 0; border-radius: 999px; padding: 12px 26px; font-weight: 600; font-size: 17px; box-shadow: 0 3px 0 color-mix(in srgb, var(--acc) 60%, #000); transition: transform .08s; }
+.btn:active { transform: translateY(2px); box-shadow: 0 1px 0 color-mix(in srgb, var(--acc) 60%, #000); }
+.btn.ghost { background: transparent; color: var(--ink); border: 2px solid var(--line); box-shadow: none; }
+
+/* start */
+.hero { padding-block: 28px 8px; display: grid; gap: 10px; }
+.eyebrow { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.hero h1 { font-size: clamp(34px, 7vw, 54px); font-weight: 800; }
+.hero p { margin: 0; color: var(--muted); max-width: 56ch; }
+.grades { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 24px; }
+.grade { background: var(--card); border: 2px solid var(--line); border-radius: 22px; padding: 22px; text-align: left; display: grid; gap: 6px; transition: border-color .15s, transform .15s; }
+.grade:hover { border-color: var(--ink); transform: translateY(-2px); }
+.grade .num { font-family: var(--f-display); font-size: 64px; font-weight: 800; line-height: 1; }
+.grade .lbl { font-weight: 600; font-size: 18px; }
+.grade .sub { color: var(--muted); font-size: 14px; }
+.plan { margin-top: 28px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.plan div { border-top: 4px solid var(--c); padding-top: 8px; min-width: 0; }
+.plan b { font-family: var(--f-display); font-size: 20px; color: var(--c); display: block; }
+.plan span { color: var(--muted); font-size: 14px; }
+@media (max-width: 520px) { .plan { grid-template-columns: 1fr; } }
+
+/* greeting */
+.greet { text-align: center; padding-block: 40px 20px; display: grid; gap: 14px; justify-items: center; }
+.greet h1 { font-size: clamp(44px, 11vw, 84px); font-weight: 800; color: var(--imo); }
+.greet h1 span { display: inline-block; animation: wave 1.6s ease-in-out 2; transform-origin: 70% 70%; }
+@keyframes wave { 0%,100% { transform: rotate(0) } 20% { transform: rotate(16deg) } 40% { transform: rotate(-8deg) } 60% { transform: rotate(12deg) } }
+.greet p { margin: 0; max-width: 46ch; color: var(--muted); }
+.rules { list-style: none; padding: 0; margin: 8px 0 10px; display: grid; gap: 8px; text-align: left; max-width: 460px; width: 100%; }
+.rules li { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; }
+
+/* quiz top strip */
+.strip { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: color-mix(in srgb, var(--paper) 92%, transparent); backdrop-filter: blur(6px); border-bottom: 1px solid var(--line); }
+.strip .in { max-width: 760px; margin: 0 auto; padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.tab { font-size: 13px; font-weight: 600; padding: 5px 11px; border-radius: 999px; border: 2px solid var(--line); color: var(--muted); }
+.tab.on { border-color: var(--acc); background: var(--acc); color: #fff; }
+.tab.done { border-color: var(--line); color: var(--ink); }
+.clocks { display: flex; gap: 14px; font-variant-numeric: tabular-nums; }
+.clk { display: grid; line-height: 1.1; }
+.clk small { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.clk b { font-family: var(--f-display); font-size: 22px; }
+.clk.warn b { color: var(--bad); }
+
+.qhead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-top: 22px; }
+.qhead .subj { font-family: var(--f-display); font-size: 22px; color: var(--acc); font-weight: 800; }
+.qhead .count { color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+.dots { display: flex; gap: 6px; margin-top: 8px; }
+.dots i { flex: 1; height: 6px; border-radius: 3px; background: var(--line); }
+.dots i.ok { background: var(--ok); } .dots i.bad { background: var(--bad); } .dots i.cur { background: var(--acc); }
+
+.qcard { background: var(--card); border: 2px solid var(--line); border-radius: 22px; padding: 22px; margin-top: 16px; display: grid; gap: 16px; }
+.qtext { font-size: 21px; font-weight: 500; line-height: 1.4; margin: 0; }
+.opts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 520px) { .opts { grid-template-columns: 1fr; } }
+.opt { display: flex; gap: 12px; align-items: center; text-align: left; background: var(--paper); border: 2px solid var(--line); border-radius: 16px; padding: 12px 14px; font-size: 17px; min-width: 0; transition: border-color .12s, background .12s; }
+.opt:hover:not(:disabled) { border-color: var(--acc); }
+.opt .k { flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; border: 2px solid var(--line); font-weight: 600; font-size: 14px; color: var(--muted); }
+.opt:disabled { cursor: default; }
+.opt.right { border-color: var(--ok); background: var(--okbg); }
+.opt.right .k { background: var(--ok); border-color: var(--ok); color: #fff; }
+.opt.wrong { border-color: var(--bad); background: var(--badbg); }
+.opt.wrong .k { background: var(--bad); border-color: var(--bad); color: #fff; }
+.opt.dim { opacity: .55; }
+
+.explain { border-radius: 18px; padding: 16px 18px; display: grid; gap: 12px; animation: pop .25s ease-out; }
+.explain.ok { background: var(--okbg); } .explain.bad { background: var(--badbg); }
+.verdict { font-family: var(--f-display); font-size: 24px; font-weight: 800; }
+.explain.ok .verdict { color: var(--ok); } .explain.bad .verdict { color: var(--bad); }
+.explain p { margin: 0; }
+.vizbox { background: var(--card); border-radius: 14px; padding: 14px; overflow-x: auto; display: flex; justify-content: center; }
+@keyframes pop { from { transform: scale(.97); opacity: .4 } to { transform: none; opacity: 1 } }
+.nav { display: flex; justify-content: flex-end; }
+
+/* SVG visuals */
+.viz { width: 100%; height: auto; display: block; overflow: visible; }
+.viz text { text-anchor: middle; dominant-baseline: central; fill: var(--ink); font-family: var(--f-body); }
+.viz .t, .viz .cap { font-size: 14px; fill: var(--muted); }
+.viz .tick { font-size: 11px; fill: var(--muted); }
+.viz .big { font-size: 17px; font-weight: 600; }
+.viz .op { font-size: 30px; font-weight: 600; }
+.viz .ansT { font-size: 19px; font-weight: 600; fill: var(--hlink); }
+.viz .ansT.sm { font-size: 13px; }
+.viz .jl { font-size: 13px; font-weight: 600; fill: var(--acc); }
+.viz .box { fill: var(--paper); stroke: var(--line); stroke-width: 1.5; }
+.viz .ans { fill: var(--hl); stroke: none; }
+.viz .bar { fill: var(--acc); opacity: .75; }
+.viz .axis, .viz .lead { stroke: var(--muted); stroke-width: 2; fill: none; }
+.viz .lead { stroke-width: 1; stroke-dasharray: 3 3; }
+.viz .jump { stroke: var(--acc); stroke-width: 2.5; fill: none; }
+.viz .startdot { fill: var(--acc); }
+.viz .markdot { fill: var(--hl); stroke: var(--ink); stroke-width: 2; }
+.viz .cross { stroke: var(--bad); stroke-width: 3; stroke-linecap: round; }
+.viz .face { fill: var(--paper); stroke: var(--ink); stroke-width: 3; }
+.viz .hand { stroke: var(--ink); stroke-linecap: round; } .viz .hand.h { stroke-width: 6; } .viz .hand.m { stroke-width: 3.5; stroke: var(--acc); }
+.viz .pin { fill: var(--ink); }
+.viz .ten { fill: var(--acc); stroke: var(--card); stroke-width: 1; } .viz .one { fill: var(--hl); stroke: var(--ink); stroke-width: 1; }
+.viz .cell { fill: color-mix(in srgb, var(--acc) 15%, var(--card)); stroke: var(--line); stroke-width: 1; }
+.viz .outline, .viz .shp { fill: none; stroke: var(--ink); stroke-width: 3; stroke-linejoin: round; }
+.viz .shp { fill: color-mix(in srgb, var(--acc) 14%, var(--card)); }
+.viz .corner { fill: var(--hl); stroke: var(--ink); stroke-width: 1.5; }
+.viz .symm { stroke: var(--acc); stroke-width: 2; stroke-dasharray: 6 5; }
+.viz .ray { stroke: var(--ink); stroke-width: 3; stroke-linecap: round; }
+.viz .arc { stroke: var(--acc); stroke-width: 2.5; fill: none; }
+.viz .setA { fill: color-mix(in srgb, var(--imo) 18%, transparent); stroke: var(--imo); stroke-width: 2; }
+.viz .setB { fill: color-mix(in srgb, var(--ieo) 18%, transparent); stroke: var(--ieo); stroke-width: 2; }
+.viz .sun { fill: #f6b72a; } .viz .pl { fill: var(--muted); } .viz .pl.on { fill: var(--acc); }
+.viz .soil { fill: color-mix(in srgb, #8a5a2b 35%, var(--card)); }
+.viz .stem { stroke: #2f9a4a; stroke-width: 5; fill: none; } .viz .leaf { fill: #3fb35d; }
+.viz .petal { fill: #f07ab0; } .viz .core { fill: #f6c21f; }
+.viz .root { stroke: #8a5a2b; stroke-width: 3; fill: none; stroke-linecap: round; }
+.viz .plank { fill: #b07a3e; } .viz .fulcrum { fill: var(--acc); }
+.viz .sumline { stroke: var(--ink); stroke-width: 2; }
+.viz .mono { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; font-size: 24px; text-anchor: end; }
+.viz .mono.ansT { font-size: 24px; }
+
+/* HTML visuals */
+.cards { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; align-items: center; }
+.cd { background: var(--paper); border: 2px solid var(--line); border-radius: 16px; padding: 10px 14px; min-width: 92px; text-align: center; display: grid; gap: 2px; }
+.cd .e { font-size: 34px; line-height: 1.2; }
+.cd .tt { font-weight: 600; }
+.cd .ss { font-size: 13px; color: var(--muted); }
+.cd.ok { background: var(--hl); border-color: var(--hl); color: var(--hlink); }
+.cd.ok .ss { color: var(--hlink); }
+.arr { font-size: 22px; color: var(--acc); font-weight: 600; }
+.sent { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; align-items: flex-start; padding-block: 4px; }
+.w { display: grid; justify-items: center; gap: 4px; }
+.w b { font-weight: 500; font-size: 20px; padding: 4px 10px; border-radius: 10px; background: var(--paper); border: 1px solid var(--line); }
+.w.on b { background: var(--hl); border-color: var(--hl); color: var(--hlink); font-weight: 600; }
+.w small { font-size: 12px; color: var(--acc); font-weight: 600; }
+
+/* section summary + results */
+.panel { background: var(--card); border: 2px solid var(--line); border-radius: 22px; padding: 26px; margin-top: 24px; display: grid; gap: 16px; justify-items: start; }
+.panel h2 { font-size: 32px; }
+.score { font-family: var(--f-display); font-size: 64px; font-weight: 800; color: var(--acc); line-height: 1; font-variant-numeric: tabular-nums; }
+.score small { font-size: 26px; color: var(--muted); }
+.rows { display: grid; gap: 10px; width: 100%; }
+.row { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; align-items: center; }
+.row .nm { font-weight: 600; }
+.row .meter { grid-column: 1 / -1; height: 10px; background: var(--paper); border-radius: 5px; overflow: hidden; border: 1px solid var(--line); }
+.row .meter i { display: block; height: 100%; border-radius: 5px; }
+.row b { font-variant-numeric: tabular-nums; }
+.btns { display: flex; flex-wrap: wrap; gap: 10px; }
+.muted { color: var(--muted); margin: 0; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<div id="strip" class="strip" hidden></div>
+<main class="wrap" id="app"></main>
+
+<script>
+/*BANK*/
+</script>
+<script>
+const SUBJ = [
+  { key: "imo", code: "IMO", name: "Maths" },
+  { key: "nso", code: "NSO", name: "Science" },
+  { key: "ieo", code: "IEO", name: "English" },
+];
+const NAMES = { 1: "Myra", 4: "Reyhaan" };
+const SECTION_MS = 20 * 60 * 1000, PER_SECTION = 10;
+const app = document.getElementById("app"), strip = document.getElementById("strip");
+let S = null, timer = null;
+
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const fmt = v => Number(v).toLocaleString("en-IN");
+const mmss = ms => { ms = Math.max(0, ms); const t = Math.ceil(ms / 1000); const h = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60), s = t % 60; return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(s).padStart(2, "0"); };
+
+// ---------- visuals ----------
+const svg = (w, h, inner) => `<svg class="viz" viewBox="0 0 ${w} ${h}" style="max-width:${Math.round(w * 1.25)}px" aria-hidden="true">${inner}</svg>`;
+const T = (x, y, s, cls = "t") => `<text x="${x}" y="${y}" class="${cls}">${esc(s)}</text>`;
+const E = (x, y, e, size = 18) => `<text x="${x}" y="${y}" font-size="${size}">${e}</text>`;
+const icons = (n, e, x0, y0, per, g) => { let o = ""; for (let k = 0; k < n; k++) o += E(x0 + (k % per) * g + g / 2, y0 + Math.floor(k / per) * g + g / 2, e); return o; };
+
+const VIZ = {
+  add({ a, b, i }) {
+    const per = 5, g = 27, bw = per * g + 12, rows = Math.ceil(Math.max(a, b) / per), bh = rows * g + 12, h = bh + 30, x2 = bw + 36, x3 = x2 + bw + 36;
+    return svg(x3 + 56, h,
+      `<rect x="0" y="4" width="${bw}" height="${bh}" rx="10" class="box"/>` + icons(a, i, 6, 10, per, g) + T(bw / 2, bh + 20, a, "cap") +
+      T(bw + 18, bh / 2 + 4, "+", "op") +
+      `<rect x="${x2}" y="4" width="${bw}" height="${bh}" rx="10" class="box"/>` + icons(b, i, x2 + 6, 10, per, g) + T(x2 + bw / 2, bh + 20, b, "cap") +
+      T(x2 + bw + 18, bh / 2 + 4, "=", "op") + `<circle cx="${x3 + 28}" cy="${bh / 2 + 4}" r="26" class="ans"/>` + T(x3 + 28, bh / 2 + 4, a + b, "ansT"));
+  },
+  sub({ a, b, i }) {
+    const per = 5, g = 28, rows = Math.ceil(a / per), bw = per * g + 12, bh = rows * g + 12, h = bh + 30, cy = bh / 2 + 4;
+    let o = `<rect x="0" y="4" width="${bw}" height="${bh}" rx="10" class="box"/>`;
+    for (let k = 0; k < a; k++) {
+      const x = 6 + (k % per) * g + g / 2, y = 10 + Math.floor(k / per) * g + g / 2, gone = k >= a - b;
+      o += `<g opacity="${gone ? .35 : 1}">${E(x, y, i)}</g>` + (gone ? `<line x1="${x - 11}" y1="${y - 11}" x2="${x + 11}" y2="${y + 11}" class="cross"/>` : "");
+    }
+    o += T(bw / 2, bh + 20, `${a} take away ${b}`, "cap") + T(bw + 22, cy, "=", "op") + `<circle cx="${bw + 72}" cy="${cy}" r="26" class="ans"/>` + T(bw + 72, cy, a - b, "ansT");
+    return svg(bw + 104, h, o);
+  },
+  array({ r, c, i, cap }) {
+    const g = 30, w = c * g + 12, h = r * g + 40; let o = "";
+    for (let y = 0; y < r; y++) {
+      o += `<rect x="0" y="${4 + y * g}" width="${w}" height="${g - 4}" rx="8" class="box"/>`;
+      for (let x = 0; x < c; x++) o += E(6 + x * g + g / 2, 4 + y * g + (g - 4) / 2, i, 18);
+      o += T(w + 20, 4 + y * g + (g - 4) / 2, c, "cap");
+    }
+    return svg(w + 40, h, o + T((w + 40) / 2, h - 12, cap || `${r} groups of ${c} = ${r * c}`, "big"));
+  },
+  numline(p) {
+    const { from, to } = p, step = p.step || 1, W = 380, pad = 24, y = 74, X = v => pad + (v - from) / (to - from) * (W - 2 * pad);
+    const n = Math.round((to - from) / step), every = p.every || (n > 12 ? Math.ceil(n / 10) : 1);
+    let o = `<line x1="${pad - 10}" y1="${y}" x2="${W - pad + 10}" y2="${y}" class="axis"/>`;
+    for (let k = 0; k <= n; k++) { const v = from + k * step, x = X(v); o += `<line x1="${x}" y1="${y - 6}" x2="${x}" y2="${y + 6}" class="axis"/>` + (k % every === 0 ? T(x, y + 20, fmt(v), "tick") : ""); }
+    let cur = p.start;
+    if (cur != null) {
+      (p.jumps || []).forEach(j => {
+        const x1 = X(cur), x2 = X(cur + j), mx = (x1 + x2) / 2, hg = Math.min(44, Math.abs(x2 - x1) / 2 + 12);
+        o += `<path d="M${x1} ${y - 5} Q${mx} ${y - 5 - hg * 2} ${x2} ${y - 5}" class="jump"/>` + T(mx, y - 16 - hg, (j > 0 ? "+" : "−") + fmt(Math.abs(j)), "jl");
+        cur += j;
+      });
+      o += `<circle cx="${X(p.start)}" cy="${y}" r="6" class="startdot"/>`;
+    }
+    const m = p.mark ?? cur;
+    o += `<circle cx="${X(m)}" cy="${y}" r="9" class="markdot"/>` + T(X(m), y + 42, fmt(m), "big");
+    return svg(W, y + 56, o);
+  },
+  seq(p) {
+    const n = p.items.length, bw = 54, gap = 22, W = n * bw + (n - 1) * gap, top = p.rule ? 34 : 4; let o = "";
+    p.items.forEach((s, k) => {
+      const x = k * (bw + gap), on = k === p.hl;
+      o += `<rect x="${x}" y="${top}" width="${bw}" height="46" rx="10" class="${on ? "ans" : "box"}"/>` + T(x + bw / 2, top + 23, s, on ? "ansT" : "big");
+      if (p.rule && k < n - 1) { const a = x + bw / 2 + 6, b = x + bw + gap + bw / 2 - 6; o += `<path d="M${a} ${top - 2} Q${(a + b) / 2} ${top - 30} ${b} ${top - 2}" class="jump"/>` + T((a + b) / 2, top - 24, p.rule, "jl"); }
+    });
+    return svg(W, top + 52, o);
+  },
+  clock({ h, m }) {
+    const c = 82, r = 70; let o = `<circle cx="${c}" cy="${c}" r="${r}" class="face"/>`;
+    for (let k = 1; k <= 12; k++) { const a = k * Math.PI / 6; o += T(c + Math.sin(a) * (r - 15), c - Math.cos(a) * (r - 15), k, "big"); }
+    const ha = ((h % 12) + m / 60) * Math.PI / 6, ma = m * Math.PI / 30;
+    o += `<line x1="${c}" y1="${c}" x2="${c + Math.sin(ha) * 34}" y2="${c - Math.cos(ha) * 34}" class="hand h"/><line x1="${c}" y1="${c}" x2="${c + Math.sin(ma) * 52}" y2="${c - Math.cos(ma) * 52}" class="hand m"/><circle cx="${c}" cy="${c}" r="5" class="pin"/>`;
+    return svg(164, 164, o);
+  },
+  place({ n }) {
+    const t = Math.floor(n / 10), u = n % 10, s = 11; let o = "";
+    for (let k = 0; k < t; k++) for (let j = 0; j < 10; j++) o += `<rect x="${k * (s + 9)}" y="${j * s}" width="${s}" height="${s}" class="ten"/>`;
+    const ox = t * (s + 9) + 24;
+    for (let k = 0; k < u; k++) o += `<rect x="${ox + (k % 5) * (s + 5)}" y="${74 + Math.floor(k / 5) * (s + 5)}" width="${s}" height="${s}" class="one"/>`;
+    return svg(ox + 84, 134, o + T(t * (s + 9) / 2 - 4, 126, `${t} tens`, "big") + T(ox + 36, 126, `${u} ones`, "big"));
+  },
+  pv({ n, i }) {
+    const L = ["L", "TTh", "Th", "H", "T", "O"].slice(-n.length), cw = 56, W = n.length * cw, p = n.length - 1 - i, val = Number(n[i]) * 10 ** p; let o = "";
+    [...n].forEach((d, k) => {
+      const x = k * cw, on = k === i;
+      o += `<rect x="${x + 3}" y="2" width="${cw - 6}" height="24" rx="6" class="box"/>` + T(x + cw / 2, 14, L[k], "cap") +
+        `<rect x="${x + 3}" y="32" width="${cw - 6}" height="46" rx="8" class="${on ? "ans" : "box"}"/>` + T(x + cw / 2, 55, d, on ? "ansT" : "big");
+    });
+    return svg(W, 108, o + T(W / 2, 98, `${n[i]} × ${fmt(10 ** p)} = ${fmt(val)}`, "big"));
+  },
+  frac({ n, d, total }) {
+    const W = 320, pw = W / d; let o = "";
+    for (let k = 0; k < d; k++) o += `<rect x="${k * pw + 2}" y="4" width="${pw - 4}" height="48" rx="8" class="${k < n ? "ans" : "box"}"/>` + T(k * pw + pw / 2, 28, total ? total / d : `1/${d}`, k < n ? "ansT" : "big");
+    return svg(W, 84, o + T(W / 2, 72, total ? `${n} parts of ${total / d} = ${n * total / d}` : `${n} of ${d} equal parts shaded = ${n}/${d}`, "big"));
+  },
+  rect({ w, h, grid, unit = "cm" }) {
+    const s = Math.min(240 / w, 150 / h), W = w * s, H = h * s, ox = 46, oy = 22; let o = "";
+    if (grid) for (let x = 0; x < w; x++) for (let y = 0; y < h; y++) o += `<rect x="${ox + x * s}" y="${oy + y * s}" width="${s}" height="${s}" class="cell"/>`;
+    o += `<rect x="${ox}" y="${oy}" width="${W}" height="${H}" class="outline"/>` +
+      T(ox + W / 2, oy - 11, `${w} ${unit}`, "cap") + T(ox + W / 2, oy + H + 14, `${w} ${unit}`, "cap") + T(ox - 22, oy + H / 2, `${h} ${unit}`, "cap") + T(ox + W + 24, oy + H / 2, `${h} ${unit}`, "cap");
+    return svg(ox * 2 + W, oy + H + 30, o);
+  },
+  shape({ name, sym }) {
+    let pts = name === "triangle" ? [[90, 14], [166, 146], [14, 146]] : [[20, 10], [160, 10], [160, 150], [20, 150]];
+    let o = `<polygon points="${pts.map(p => p.join(",")).join(" ")}" class="shp"/>`;
+    if (sym) o += `<line x1="90" y1="0" x2="90" y2="160" class="symm"/><line x1="10" y1="80" x2="170" y2="80" class="symm"/><line x1="10" y1="0" x2="170" y2="160" class="symm"/><line x1="170" y1="0" x2="10" y2="160" class="symm"/>`;
+    else {
+      pts.forEach(([x, y], k) => o += `<circle cx="${x}" cy="${y}" r="8" class="corner"/>`);
+      pts.forEach(([x, y], k) => { const [a, b] = pts[(k + 1) % pts.length], mx = (x + a) / 2, my = (y + b) / 2, cx = 90, cy = 90; const dx = mx - cx, dy = my - cy, l = Math.hypot(dx, dy); o += T(mx + dx / l * 16, my + dy / l * 16, k + 1, "jl"); });
+    }
+    return svg(180, 162, o);
+  },
+  angle({ deg }) {
+    const cx = 30, cy = 130, L = 120, a = deg * Math.PI / 180;
+    let o = `<line x1="${cx}" y1="${cy}" x2="${cx + L}" y2="${cy}" class="ray"/><line x1="${cx}" y1="${cy}" x2="${cx + L * Math.cos(a)}" y2="${cy - L * Math.sin(a)}" class="ray"/>`;
+    o += deg === 90 ? `<path d="M${cx + 20} ${cy} V${cy - 20} H${cx}" class="arc"/>` : `<path d="M${cx + 30} ${cy} A30 30 0 0 0 ${cx + 30 * Math.cos(a)} ${cy - 30 * Math.sin(a)}" class="arc"/>`;
+    return svg(170, 140, o + T(cx + 62, cy - 42, deg + "°", "big"));
+  },
+  bars({ items, hl }) {
+    const max = Math.max(...items.map(i => i[1])), bw = 44, gap = 20, H = 120, W = items.length * (bw + gap); let o = `<line x1="0" y1="${H + 12}" x2="${W}" y2="${H + 12}" class="axis"/>`;
+    items.forEach(([l, v], k) => { const x = k * (bw + gap) + gap / 2, h = v / max * H * .85; o += `<rect x="${x}" y="${H + 12 - h}" width="${bw}" height="${h}" rx="4" class="${k === hl ? "ans" : "bar"}"/>` + T(x + bw / 2, H + 2 - h, v, "big") + T(x + bw / 2, H + 26, l, "cap"); });
+    return svg(W, H + 36, o);
+  },
+  venn(p) {
+    let o = `<circle cx="120" cy="96" r="78" class="setA"/><circle cx="220" cy="96" r="78" class="setB"/>` + T(96, 8, p.la, "cap") + T(244, 8, p.lb, "cap");
+    const col = (arr, x0) => arr.map((v, k) => { let x = x0, y = 96 + (k - (arr.length - 1) / 2) * 22; if (arr.length > 4) { const c = k % 2, rr = Math.floor(k / 2), nr = Math.ceil(arr.length / 2); x = x - 13 + c * 26; y = 96 + (rr - (nr - 1) / 2) * 24; } return (v === p.hl ? `<circle cx="${x}" cy="${y}" r="12" class="ans"/>` : "") + T(x, y, v, v === p.hl ? "ansT sm" : "big"); }).join("");
+    return svg(340, 178, o + col(p.a, 82) + col(p.m, 170) + col(p.b, 258));
+  },
+  planets({ hl }) {
+    const P = [["Mercury", 5], ["Venus", 8], ["Earth", 8], ["Mars", 6], ["Jupiter", 17], ["Saturn", 14], ["Uranus", 10], ["Neptune", 10]];
+    let o = `<circle cx="26" cy="60" r="26" class="sun"/>` + T(26, 60, "Sun", "big");
+    P.forEach(([n, r], k) => { const x = 82 + k * 44; o += `<circle cx="${x}" cy="60" r="${r}" class="pl${k === hl ? " on" : ""}"/>` + T(x, k % 2 ? 98 : 22, n, k === hl ? "jl" : "tick"); });
+    return svg(414, 112, o);
+  },
+  plant({ hl }) {
+    let o = `<rect x="0" y="118" width="250" height="56" rx="6" class="soil"/><path d="M100 120 L100 40" class="stem"/>` +
+      `<ellipse cx="80" cy="86" rx="21" ry="9" transform="rotate(-25 80 86)" class="leaf"/><ellipse cx="120" cy="70" rx="21" ry="9" transform="rotate(25 120 70)" class="leaf"/>`;
+    for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3; o += `<circle cx="${100 + Math.cos(a) * 11}" cy="${32 + Math.sin(a) * 11}" r="8" class="petal"/>`; }
+    o += `<circle cx="100" cy="32" r="6" class="core"/><path d="M100 120 L84 150 M100 120 L100 162 M100 120 L118 148 M91 137 L78 141 M109 134 L124 132" class="root"/>`;
+    [["flower", 32, 114], ["leaf", 70, 140], ["stem", 104, 103], ["root", 150, 120]].forEach(([n, y, x1]) => { const on = n === hl; o += `<line x1="${x1}" y1="${y}" x2="174" y2="${y}" class="lead"/><rect x="176" y="${y - 12}" width="68" height="24" rx="12" class="${on ? "ans" : "box"}"/>` + T(210, y, n, on ? "ansT sm" : "cap"); });
+    return svg(250, 176, o);
+  },
+  lever() {
+    return svg(300, 140, `<polygon points="150,80 128,124 172,124" class="fulcrum"/><rect x="20" y="66" width="260" height="12" rx="4" class="plank" transform="rotate(-10 150 72)"/>` +
+      E(44, 74, "🧒", 34) + E(256, 28, "👧", 34) + T(150, 134, "fulcrum (turning point)", "cap"));
+  },
+  sum({ rows, ans }) {
+    const x = 150; let o = rows.map((r, k) => T(x, 22 + k * 32, r, "mono")).join("");
+    const y = 22 + rows.length * 32 - 12;
+    return svg(170, y + 50, o + `<line x1="40" y1="${y}" x2="${x + 4}" y2="${y}" class="sumline"/><rect x="50" y="${y + 6}" width="${x - 44}" height="34" rx="8" class="ans"/>` + T(x, y + 23, ans, "mono ansT"));
+  },
+  cards({ items, arrow }) {
+    return `<div class="cards">` + items.map(([e, t, s, ok], k) => (arrow && k ? `<span class="arr" aria-hidden="true">→</span>` : "") +
+      `<div class="cd${ok ? " ok" : ""}">${e ? `<span class="e">${e}</span>` : ""}<span class="tt">${esc(t)}</span>${s ? `<span class="ss">${esc(s)}</span>` : ""}</div>`).join("") + `</div>`;
+  },
+  sentence({ w, hl, tag }) {
+    return `<div class="sent">` + w.split(" ").map((x, k) => `<span class="w${k === hl ? " on" : ""}"><b>${esc(x)}</b>${k === hl ? `<small>${esc(tag)}</small>` : ""}</span>`).join("") + `</div>`;
+  },
+};
+const viz = v => v ? `<div class="vizbox">${VIZ[v.t](v)}</div>` : "";
+
+// ---------- flow ----------
+function start() {
+  clearInterval(timer); strip.hidden = true; document.body.dataset.subj = "imo";
+  app.innerHTML = `
+  <section class="hero">
+    <span class="eyebrow">Olympiad practice · IMO · NSO · IEO</span>
+    <h1>Which grade are you practising today?</h1>
+    <p>Pick your grade to begin. You will get 10 fresh questions in each subject, with a picture explanation after every answer.</p>
+  </section>
+  <div class="grades">
+    <button class="grade" id="g1" data-g="1"><span class="num">1</span><span class="lbl">Grade 1</span><span class="sub">Counting, shapes, plants, animals and first words</span></button>
+    <button class="grade" id="g4" data-g="4"><span class="num">4</span><span class="lbl">Grade 4</span><span class="sub">Fractions, area, the solar system, tenses and idioms</span></button>
+  </div>
+  <div class="plan">
+    <div style="--c:var(--imo)"><b>IMO · Maths</b><span>10 questions · 20 minutes</span></div>
+    <div style="--c:var(--nso)"><b>NSO · Science</b><span>10 questions · 20 minutes</span></div>
+    <div style="--c:var(--ieo)"><b>IEO · English</b><span>10 questions · 20 minutes</span></div>
+  </div>`;
+  app.querySelectorAll(".grade").forEach(b => b.onclick = () => greet(+b.dataset.g));
+}
+
+function greet(g) {
+  S = { grade: g, cur: 0, sections: SUBJ.map(s => ({ ...s, qs: shuffle(BANK[g][s.key]).slice(0, PER_SECTION).map(q => ({ ...q, opts: q.k ? q.o.slice() : shuffle(q.o) })), idx: 0, res: [], endAt: 0, done: false, timeUp: false })) };
+  app.innerHTML = `
+  <section class="greet">
+    <h1>Hello ${NAMES[g]} <span aria-hidden="true">👋</span></h1>
+    <p>Ready for today's Grade ${g} Olympiad practice? Here is how it works.</p>
+    <ul class="rules">
+      <li>3 subjects in a row: Maths, then Science, then English.</li>
+      <li>Each subject has 10 questions and its own 20-minute clock. The whole test is 1 hour.</li>
+      <li>Tap an answer. You will see if it is right, with a picture that explains why.</li>
+    </ul>
+    <button class="btn" id="go">Start Maths</button>
+  </section>`;
+  document.getElementById("go").onclick = () => beginSection(0);
+}
+
+function beginSection(i) {
+  S.cur = i; const sec = S.sections[i];
+  sec.endAt = Date.now() + SECTION_MS; document.body.dataset.subj = sec.key;
+  strip.hidden = false; clearInterval(timer); timer = setInterval(tick, 500);
+  renderQ(); tick(); window.scrollTo(0, 0);
+}
+
+function remaining() { const sec = S.sections[S.cur]; return sec.done ? 0 : sec.endAt - Date.now(); }
+
+function tick() {
+  if (!S) return;
+  const sec = S.sections[S.cur], left = remaining(), future = S.sections.filter((s, k) => k > S.cur).length * SECTION_MS, total = left + future;
+  strip.innerHTML = `<div class="in">
+    <div class="tabs">${S.sections.map((s, k) => `<span class="tab ${k === S.cur && !s.done ? "on" : s.done ? "done" : ""}">${s.code} ${s.done ? "✓" : ""}</span>`).join("")}</div>
+    <div class="clocks"><div class="clk ${left < 120000 && !sec.done ? "warn" : ""}"><small>${sec.name} left</small><b>${mmss(left)}</b></div><div class="clk"><small>Total left</small><b>${mmss(total)}</b></div></div></div>`;
+  if (!sec.done && left <= 0) { sec.timeUp = true; endSection(); }
+}
+
+function renderQ() {
+  const sec = S.sections[S.cur], q = sec.qs[sec.idx];
+  app.innerHTML = `
+  <div class="qhead"><span class="subj">${sec.code} · ${sec.name}</span><span class="count">Question ${sec.idx + 1} of ${sec.qs.length}</span></div>
+  <div class="dots">${sec.qs.map((_, k) => `<i class="${k < sec.res.length ? (sec.res[k] ? "ok" : "bad") : k === sec.idx ? "cur" : ""}"></i>`).join("")}</div>
+  <article class="qcard">
+    <p class="qtext">${esc(q.q)}</p>
+    ${viz(q.qv)}
+    <div class="opts">${q.opts.map((o, k) => `<button class="opt" id="opt${k}" data-k="${k}"><span class="k">${"ABCD"[k]}</span><span>${esc(o)}</span></button>`).join("")}</div>
+    <div id="fb"></div>
+  </article>`;
+  app.querySelectorAll(".opt").forEach(b => b.onclick = () => answer(+b.dataset.k));
+}
+
+function answer(k) {
+  const sec = S.sections[S.cur], q = sec.qs[sec.idx];
+  if (sec.res.length > sec.idx || sec.done) return;
+  const correct = q.opts[k] === q.o[0]; sec.res.push(correct);
+  app.querySelectorAll(".opt").forEach((b, j) => { b.disabled = true; if (q.opts[j] === q.o[0]) b.classList.add("right"); else if (j === k) b.classList.add("wrong"); else b.classList.add("dim"); });
+  const last = sec.idx === sec.qs.length - 1;
+  document.getElementById("fb").innerHTML = `
+    <div class="explain ${correct ? "ok" : "bad"}" role="status">
+      <span class="verdict">${correct ? "Correct, well done!" : "Not quite."}</span>
+      <p>${correct ? "" : `The right answer is <b>${esc(q.o[0])}</b>. `}${esc(q.e)}</p>
+      ${viz(q.v)}
+    </div>
+    <div class="nav"><button class="btn" id="next">${last ? `Finish ${sec.name}` : "Next question"}</button></div>`;
+  document.querySelector(".dots").children[sec.idx].className = correct ? "ok" : "bad";
+  const nx = document.getElementById("next"); nx.onclick = () => { if (last) endSection(); else { sec.idx++; renderQ(); window.scrollTo(0, 0); } };
+  nx.focus({ preventScroll: true });
+  document.getElementById("fb").scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function endSection() {
+  const sec = S.sections[S.cur]; if (sec.done) return;
+  sec.done = true; tick();
+  const score = sec.res.filter(Boolean).length, next = S.sections[S.cur + 1];
+  const unanswered = sec.qs.length - sec.res.length;
+  if (!next) return results();
+  app.innerHTML = `
+  <section class="panel">
+    <span class="eyebrow">${sec.code} · ${sec.name} finished${sec.timeUp ? " (time's up)" : ""}</span>
+    <div class="score">${score}<small> / ${sec.qs.length}</small></div>
+    <p class="muted">${unanswered ? `${unanswered} question${unanswered > 1 ? "s were" : " was"} left unanswered. ` : ""}${score >= 8 ? "Brilliant work, " : score >= 5 ? "Good going, " : "Keep practising, "}${NAMES[S.grade]}! Next up is ${next.name}, with a fresh 20-minute clock.</p>
+    <button class="btn" id="go" style="--acc:var(--${next.key})">Start ${next.name}</button>
+  </section>`;
+  document.getElementById("go").onclick = () => beginSection(S.cur + 1);
+}
+
+function results() {
+  clearInterval(timer); strip.hidden = true;
+  const total = S.sections.reduce((a, s) => a + s.res.filter(Boolean).length, 0), max = S.sections.length * PER_SECTION;
+  const pct = total / max;
+  app.innerHTML = `
+  <section class="panel">
+    <span class="eyebrow">Grade ${S.grade} practice complete</span>
+    <h2>${pct >= .8 ? "Superstar" : pct >= .5 ? "Great effort" : "Nice try"}, ${NAMES[S.grade]}!</h2>
+    <div class="score">${total}<small> / ${max}</small></div>
+    <div class="rows">${S.sections.map(s => { const sc = s.res.filter(Boolean).length; return `<div class="row"><span class="nm">${s.code} · ${s.name}</span><b>${sc} / ${s.qs.length}</b><span class="meter"><i style="width:${sc / s.qs.length * 100}%;background:var(--${s.key})"></i></span></div>`; }).join("")}</div>
+    <p class="muted">Every new attempt picks a different set of questions.</p>
+    <div class="btns"><button class="btn" id="again">Practise again with new questions</button><button class="btn ghost" id="home">Choose another grade</button></div>
+  </section>`;
+  document.getElementById("again").onclick = () => greet(S.grade);
+  document.getElementById("home").onclick = () => { S = null; start(); };
+}
+
+document.addEventListener("keydown", e => {
+  if (!S || strip.hidden) return;
+  const i = "1234abcd".indexOf(e.key.toLowerCase()); if (i < 0) return;
+  const b = document.getElementById("opt" + (i % 4)); if (b && !b.disabled) b.click();
+});
+start();
+</script>
