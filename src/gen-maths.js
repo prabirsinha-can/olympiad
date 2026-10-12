@@ -12,7 +12,7 @@ const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
 const ROM = [[100, "C"], [90, "XC"], [50, "L"], [40, "XL"], [10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"]];
 const roman = n => { let s = ""; const parts = []; for (const [v, r] of ROM) { let c = 0; while (n >= v) { s += r; n -= v; c++; } if (c) parts.push([r.repeat(c), v * c]); } return { s, parts }; };
 const rupees = x => "₹" + N(x);
-const ord = n => n + (n === 1 ? "st" : n === 2 ? "nd" : n === 3 ? "rd" : "th");
+const ord = n => n + ([11, 12, 13].includes(n % 100) ? "th" : n % 10 === 1 ? "st" : n % 10 === 2 ? "nd" : n % 10 === 3 ? "rd" : "th");
 const factors = n => { const f = []; for (let i = 1; i <= n; i++) if (n % i === 0) f.push(i); return f; };
 
 G[1].imo = Q => {
