@@ -32,10 +32,15 @@ function words(ans, pool, not = []) {
 
 const G = { 1: {}, 4: {} };   // G[grade][subject] = generator(add): the earlier, gentler questions
 const H = { 1: {}, 4: {} };   // H[grade][subject] = generator(add): Olympiad-level questions
+const X = { 1: {}, 4: {} };   // X[grade][subject] = generator(add): challenge-level questions (the whole bank since 2026-10-12)
 // After the "too easy" feedback the bank keeps only the earlier hard questions (as medium)
 // and adds Olympiad-level ones (as hard). Earlier easy and medium questions are dropped.
 const TIER = { easy: null, medium: null, hard: "medium", top: "hard" };
-function buildPool(grade, subj, hand, target = { medium: 60, hard: 240 }) {
+// The kids found even the Olympiad-level mix too easy, so when a challenge generator exists the bank is
+// built from it alone: 300 challenge questions, all tagged "hard".
+function buildPool(grade, subj, hand, target) {
+  const xmode = !!X[grade][subj];
+  target = target || (xmode ? { medium: 0, hard: 300 } : { medium: 60, hard: 240 });
   R = seeded(grade * 1000 + subj.length * 97 + subj.charCodeAt(0));
   const tiers = { medium: [], hard: [] }, keys = new Set();
   const add = (d, q) => {
@@ -46,10 +51,10 @@ function buildPool(grade, subj, hand, target = { medium: 60, hard: 240 }) {
     if (keys.has(key) || new Set(q.o).size !== 4) return;
     keys.add(key); tiers[d].push(q);
   };
-  hand.forEach(q => add(q.d || "medium", q));
+  if (!xmode) hand.forEach(q => add(q.d || "medium", q));
   const emit = (d, q, o, e, v, extra) => add(d, Object.assign({ q, o, e, v }, extra || {}));
-  G[grade][subj](emit);
-  if (H[grade][subj]) H[grade][subj](emit);
+  if (xmode) X[grade][subj](emit);
+  else { G[grade][subj](emit); if (H[grade][subj]) H[grade][subj](emit); }
   const pool = { avail: { medium: tiers.medium.length, hard: tiers.hard.length } };
   for (const d in tiers) pool[d] = mix(tiers[d]).slice(0, target[d]).map((q, i) => ({ ...q, id: `${grade}${subj}${d[0]}${i}` }));
   R = Math.random;

@@ -386,23 +386,23 @@ function start() {
   <section class="hero">
     <span class="eyebrow">Olympiad practice · IMO · NSO · IEO</span>
     <h1>Which grade are you practising today?</h1>
-    <p>Pick your grade to begin. Each subject has a bank of 300 questions. Every test draws 10 new ones per subject (2 medium and 8 hard, Olympiad level), with a picture explanation after every answer.</p>
+    <p>Pick your grade to begin. Each subject has a bank of 300 questions. Every test draws 10 new ones per subject (all at Olympiad challenge level), with a picture explanation after every answer.</p>
   </section>
   <div class="grades">
     <button class="grade" id="g1" data-g="1"><span class="num">1</span><span class="lbl">Grade 1</span><span class="sub">Counting, shapes, plants, animals and first words</span></button>
     <button class="grade" id="g4" data-g="4"><span class="num">4</span><span class="lbl">Grade 4</span><span class="sub">Fractions, area, the solar system, tenses and idioms</span></button>
   </div>
   <div class="plan">
-    <div style="--c:var(--imo)"><b>IMO · Maths</b><span>10 questions · 20 minutes · 2 medium, 8 hard</span></div>
-    <div style="--c:var(--nso)"><b>NSO · Science</b><span>10 questions · 20 minutes · 2 medium, 8 hard</span></div>
-    <div style="--c:var(--ieo)"><b>IEO · English</b><span>10 questions · 20 minutes · 2 medium, 8 hard</span></div>
+    <div style="--c:var(--imo)"><b>IMO · Maths</b><span>10 questions · 20 minutes · challenge level</span></div>
+    <div style="--c:var(--nso)"><b>NSO · Science</b><span>10 questions · 20 minutes · challenge level</span></div>
+    <div style="--c:var(--ieo)"><b>IEO · English</b><span>10 questions · 20 minutes · challenge level</span></div>
   </div>`;
   app.querySelectorAll(".grade").forEach(b => b.onclick = () => greet(+b.dataset.g));
 }
 
-const POOLS = {}, MIX = { medium: 2, hard: 8 };
+const POOLS = {}, MIX = { medium: 0, hard: 10 };
 const store = { get(k) { try { return JSON.parse(localStorage.getItem(k) || "[]"); } catch (e) { return []; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
-// 2 medium then 8 hard (Olympiad level). Questions this browser has already seen are skipped until a tier runs out.
+// All 10 are challenge level (the kids found the Olympiad-level mix too easy). Questions this browser has already seen are skipped until a tier runs out.
 function drawSet(g, key) {
   const pool = POOLS[g + key] || (POOLS[g + key] = buildPool(g, key, BANK[g][key].map(q => ({ ...q, d: q.d || (g === 1 ? "easy" : "medium") }))));
   const sk = `olympiad-seen-${g}-${key}`, seen = new Set(store.get(sk)), out = [];
@@ -510,7 +510,7 @@ function results() {
     <h2>${pct >= .8 ? "Superstar" : pct >= .5 ? "Great effort" : "Nice try"}, ${NAMES[S.grade]}!</h2>
     <div class="score">${total}<small> / ${max}</small></div>
     <div class="rows">${S.sections.map(s => { const sc = s.res.filter(Boolean).length; return `<div class="row"><span class="nm">${s.code} · ${s.name}</span><b>${sc} / ${s.qs.length}</b><span class="meter"><i style="width:${sc / s.qs.length * 100}%;background:var(--${s.key})"></i></span></div>`; }).join("")}</div>
-    <div class="lvls">${["medium", "hard"].map(d => { const all = S.sections.flatMap(s => s.qs.map((q, i) => [q, s.res[i]])).filter(([q]) => q.d === d); return `<span class="lvl ${d}">${d}</span> ${all.filter(x => x[1]).length} / ${all.length}`; }).join(" &nbsp; ")}</div>
+    <div class="lvls">${["medium", "hard"].filter(d => S.sections.some(s => s.qs.some(q => q.d === d))).map(d => { const all = S.sections.flatMap(s => s.qs.map((q, i) => [q, s.res[i]])).filter(([q]) => q.d === d); return `<span class="lvl ${d}">${d}</span> ${all.filter(x => x[1]).length} / ${all.length}`; }).join(" &nbsp; ")}</div>
     <p class="muted">Every new attempt picks a different set from the 300-question banks.</p>
     <div class="btns"><button class="btn" id="again">Practise again with new questions</button><button class="btn ghost" id="home">Choose another grade</button></div>
   </section>`;
